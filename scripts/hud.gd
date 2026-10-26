@@ -245,7 +245,7 @@ func _build_hud() -> void:
 	logo.position = Vector2(8, 6)
 	hud_root.add_child(logo)
 	var ver := _lbl("v" + Data.VERSION, 13, Color(0.8, 0.76, 0.66))
-	ver.position = Vector2(14, 38)
+	ver.position = Vector2(14, 54)
 	hud_root.add_child(ver)
 
 	var top := PanelContainer.new()
@@ -733,7 +733,7 @@ func _build_menu() -> void:
 	head.add_theme_constant_override("separation", 20)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(head)
-	head.add_child(IraqBadge.new().setup(92.0, true, true))
+	head.add_child(IraqBadge.new().setup(84.0, true, true))
 	var tv := VBoxContainer.new()
 	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tv.alignment = BoxContainer.ALIGNMENT_CENTER
