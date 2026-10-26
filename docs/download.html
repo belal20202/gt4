@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>تحميل صقور الرافدين</title>
+<meta name="description" content="حمّل لعبة صقور الرافدين لهاتف أندرويد أو العبها مباشرة من المتصفح.">
+<meta name="theme-color" content="#0b1a2a">
+<link href="https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+<nav>
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <img class="emblem" src="emblem.png" alt="" width="40" height="40">
+      صقور الرافدين
+    </a>
+    <a class="btn gold sm" href="index.html">الرئيسية</a>
+  </div>
+</nav>
+
+<main class="page">
+  <div class="wrap">
+    <div class="card">
+      <div class="ic" aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M20 2l5 11 12-5-5 12 11 5-11 5 5 12-12-5-5 11-5-11-12 5 5-12L2 20l11-5-5-12 12 5z" fill="#e0b050"/><circle cx="20" cy="20" r="6" fill="#0d2740"/></svg></div>
+      <div>
+        <h2>صقور الرافدين</h2>
+        <div>النسخة 1.0.1 · أندرويد</div>
+        <div class="row">
+          <a id="apk" class="btn gold" href="#">تحميل APK</a>
+          <a class="btn line" href="game/index.html">النسخة التجريبية (متصفح)</a>
+        </div>
+      </div>
+    </div>
+
+    <ol class="steps">
+      <li>اضغط «تحميل APK» وانتظر انتهاء التنزيل.</li>
+      <li>افتح الملف من إشعارات التنزيل أو من تطبيق الملفات.</li>
+      <li>إذا طلب الهاتف الإذن، فعّل «التثبيت من هذا المصدر» ثم ارجع واضغط تثبيت.</li>
+      <li>افتح اللعبة وأدر الهاتف بالعرض.</li>
+    </ol>
+
+    <table>
+      <tr><td>الاسم</td><td>صقور الرافدين</td></tr>
+      <tr><td>النسخة</td><td>1.0.1</td></tr>
+      <tr><td>النظام</td><td>أندرويد ٧.٠ فأحدث، هاتف يدعم Vulkan</td></tr>
+      <tr><td>الوضع</td><td>أفقي · شاشة كاملة</td></tr>
+      <tr><td>الاتصال</td><td>تعمل بدون إنترنت</td></tr>
+      <tr><td>الإعلانات والمشتريات</td><td>لا يوجد</td></tr>
+    </table>
+    <p><a href="privacy.html">اقرأ سياسة الخصوصية</a></p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><a href="index.html">الرئيسية</a><a href="privacy.html">سياسة الخصوصية</a></div>
+    <div>صنع في العراق</div>
+  </div>
+</footer>
+
+<script>
+/* يبني رابط آخر إصدار تلقائياً عند الاستضافة على GitHub Pages: user.github.io/repo */
+(function(){
+  var a=document.getElementById('apk'),h=location.hostname,p=location.pathname.split('/').filter(Boolean);
+  if(/\.github\.io$/.test(h)&&p[0]){
+    a.href='https://github.com/'+h.split('.')[0]+'/'+p[0]+'/releases/latest/download/rafidain-hawks.apk';
+  }else{
+    a.href='#';a.addEventListener('click',function(e){e.preventDefault();alert('ارفع المشروع إلى GitHub وشغّل بناء أندرويد لتظهر هنا نسخة التحميل.');});
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1b2a">
+<title>صقور الرافدين</title>
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" hidden>
+  <div id="top">
+    <span class="chip">💰 <b id="gold">0</b> <small id="inc"></small></span>
+    <span class="chip">⛏ <b id="mines">0</b>/6</span>
+    <span class="chip" id="time">00:00</span>
+    <span class="chip hint" id="obj">دمّر مقر العدو</span>
+  </div>
+  <div id="sys">
+    <button id="bPause" title="إيقاف">⏸</button>
+    <button id="bSound" title="الصوت">🔊</button>
+    <button id="bFull" title="شاشة كاملة">⛶</button>
+  </div>
+  <canvas id="mm" width="150" height="150"></canvas>
+  <div id="tools">
+    <button id="tAll" title="كل الجيش">👥<small>الجيش</small></button>
+    <button id="tAtk" title="تحرك وهاجم">⚔<small>هجوم</small></button>
+    <button id="tBox" title="تحديد بالإطار">▭<small>إطار</small></button>
+    <button id="tBld" title="قائمة البناء">🏗<small>بناء</small></button>
+  </div>
+  <div id="panel"></div>
+  <div id="toast"></div>
+</div>
+
+<div id="menu" class="screen">
+  <div class="pattern"></div>
+  <div class="box">
+    <h1>صقور الرافدين</h1>
+    <p class="sub">استراتيجية حربية بطابع عربي عراقي</p>
+    <h3>اختر جيشك</h3>
+    <div id="armies" class="grid"></div>
+    <h3>مستوى الصعوبة</h3>
+    <div id="diffs" class="row"></div>
+    <button id="start" class="big">ابدأ المعركة</button>
+    <p class="how">سحب بإصبع واحد لتحريك الخريطة · إصبعان للتقريب · اضغط وحدة لتحديدها ثم اضغط الأرض للتحرك</p>
+  </div>
+</div>
+
+<div id="pause" class="screen" hidden>
+  <div class="box small">
+    <h2>إيقاف مؤقت</h2>
+    <button id="bResume" class="big">متابعة</button>
+    <button id="bQuit" class="ghost">العودة للقائمة</button>
+  </div>
+</div>
+
+<div id="end" class="screen" hidden>
+  <div class="box small">
+    <h2 id="endT"></h2>
+    <p id="endS"></p>
+    <button id="bAgain" class="big">لعب مرة أخرى</button>
+    <button id="bMenu" class="ghost">القائمة الرئيسية</button>
+  </div>
+</div>
+
+<div id="rot" class="screen"><div class="box small"><div class="phone">📱</div><h2>أدر الهاتف بالعرض</h2><p>اللعبة تعمل بالوضع الأفقي فقط</p></div></div>
+
+<script src="js/game.js"></script>
+</body>
+</html>
