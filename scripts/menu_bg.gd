@@ -137,8 +137,4 @@ func _frame(s: Vector2) -> void:
 		x += 16.0
 	var f := get_theme_default_font()
 	if f != null:
-		var blink: bool = int(t * 2.0) % 2 == 0
 		draw_string(f, Vector2(34, s.y - 30), "33°18′N  44°22′E  ·  BAGHDAD", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.7, 0.85, 0.8, 0.6))
-		draw_string(f, Vector2(34, 38), "SYS // ONLINE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.7, 0.85, 0.8, 0.6))
-		if blink:
-			draw_circle(Vector2(26, 33), 4.0, GREEN)
