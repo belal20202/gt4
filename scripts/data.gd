@@ -57,6 +57,8 @@ var UNITS := {
 	"inf": {"name": "مشاة", "cls": "inf", "hp": 70.0, "speed": 2.4, "range": 4.5, "dmg": 9.0, "cd": 0.7, "cost": 100, "time": 4.0, "vis": 7.0, "air": false, "noair": false, "radius": 0.8, "vs": {"inf": 1.0, "veh": 0.45, "air": 0.4, "bld": 0.5}},
 	"rpg": {"name": "قاذف صواريخ", "cls": "inf", "hp": 80.0, "speed": 2.1, "range": 6.0, "dmg": 38.0, "cd": 2.2, "cost": 200, "time": 6.0, "vis": 7.0, "air": false, "noair": true, "radius": 0.8, "vs": {"inf": 0.5, "veh": 1.7, "air": 0.0, "bld": 1.1}},
 	"sniper": {"name": "قناص", "cls": "inf", "hp": 55.0, "speed": 2.2, "range": 11.0, "dmg": 55.0, "cd": 3.0, "cost": 250, "time": 7.0, "vis": 10.0, "air": false, "noair": true, "radius": 0.8, "vs": {"inf": 1.5, "veh": 0.15, "air": 0.0, "bld": 0.1}},
+	"mg": {"name": "رشّاش", "cls": "inf", "hp": 90.0, "speed": 2.2, "range": 5.5, "dmg": 5.0, "cd": 0.2, "cost": 160, "time": 5.0, "vis": 7.0, "air": false, "noair": false, "radius": 0.8, "vs": {"inf": 1.3, "veh": 0.3, "air": 0.5, "bld": 0.25}},
+	"cmd": {"name": "كوماندوز", "cls": "inf", "hp": 150.0, "speed": 2.9, "range": 5.0, "dmg": 13.0, "cd": 0.45, "cost": 330, "time": 8.0, "vis": 8.0, "air": false, "noair": false, "radius": 0.8, "vs": {"inf": 1.3, "veh": 0.6, "air": 0.6, "bld": 1.0}},
 	"lt": {"name": "مدرعة خفيفة", "cls": "veh", "hp": 170.0, "speed": 3.2, "range": 5.5, "dmg": 16.0, "cd": 0.9, "cost": 220, "time": 6.0, "vis": 8.0, "air": false, "noair": false, "radius": 1.8, "vs": {"inf": 1.3, "veh": 0.7, "air": 0.5, "bld": 0.6}},
 	"tank": {"name": "دبابة", "cls": "veh", "hp": 260.0, "speed": 1.9, "range": 6.5, "dmg": 30.0, "cd": 1.5, "cost": 350, "time": 8.0, "vis": 8.0, "air": false, "noair": true, "radius": 2.2, "vs": {"inf": 0.8, "veh": 1.0, "air": 0.0, "bld": 1.3}},
 	"heavy": {"name": "دبابة ثقيلة", "cls": "veh", "hp": 480.0, "speed": 1.4, "range": 7.0, "dmg": 55.0, "cd": 1.9, "cost": 650, "time": 12.0, "vis": 8.0, "air": false, "noair": true, "radius": 2.6, "vs": {"inf": 0.8, "veh": 1.2, "air": 0.0, "bld": 1.5}},
@@ -71,7 +73,7 @@ var UNITS := {
 var BUILDINGS := {
 	"hq": {"name": "مقر القيادة", "size": 3, "hp": 1600.0, "vis": 10.0, "cost": 0, "bt": 1.0, "train": []},
 	"dep": {"name": "مقر تجميع الذهب", "size": 3, "hp": 1100.0, "vis": 8.0, "cost": 600, "bt": 10.0, "train": ["truck"]},
-	"bar": {"name": "ثكنة", "size": 2, "hp": 700.0, "vis": 7.0, "cost": 300, "bt": 8.0, "train": ["inf", "rpg", "sniper"]},
+	"bar": {"name": "ثكنة", "size": 2, "hp": 700.0, "vis": 7.0, "cost": 300, "bt": 8.0, "train": ["inf", "mg", "rpg", "sniper", "cmd"]},
 	"fac": {"name": "مصنع دبابات", "size": 3, "hp": 950.0, "vis": 7.0, "cost": 600, "bt": 12.0, "train": ["lt", "tank", "heavy", "art", "aa"]},
 	"air": {"name": "مطار", "size": 3, "hp": 900.0, "vis": 8.0, "cost": 800, "bt": 14.0, "train": ["heli", "jet", "bomber"]},
 	"twr": {"name": "برج دفاع", "size": 1, "hp": 520.0, "vis": 8.0, "cost": 250, "bt": 6.0, "train": [], "range": 7.5, "dmg": 15.0, "cd": 0.9},
