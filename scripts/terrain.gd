@@ -1,12 +1,11 @@
 class_name Terrain
 extends Node3D
-## تضاريس 3D: بحر وبحيرات وأنهار بجسور مكتملة، جبال وكثبان وواحات وغابات نخيل وطرق وآثار.
+## تضاريس 3D مستوية بالكامل: لا ماء ولا جبال ولا مرتفعات. أرض رملية وعشب وغابات نخيل وطرق وآثار.
 ## الأنواع: 0 رمل، 1 عشب، 2 صخر، 3 ماء، 4 جسر، 5 غابة، 6 معلم أثري
 ## build_block: 1 = لا يمكن البناء (شجر أو حجر أو أثر)
 
 const SHADER_T := preload("res://shaders/terrain.gdshader")
-const SHADER_W := preload("res://shaders/water.gdshader")
-const WATER_Y := -0.35
+const FLAT_Y := 1.0   # ارتفاع الأرض الثابت (فوق حدّ الرطوبة في الشيدر فلا تظهر الأرض داكنة)
 const CHUNK := 64.0
 
 var n: int = Data.MAP
@@ -15,7 +14,6 @@ var heights := PackedFloat32Array()
 var road_w := PackedFloat32Array()
 var build_block := PackedByteArray()
 var terr_mat: ShaderMaterial
-var water_mat: ShaderMaterial
 var height_tex: ImageTexture
 var landmarks: Array = []
 var bridge_rows: Array = []
@@ -34,8 +32,6 @@ func _p(v: float, text: String) -> void:
 func generate(seed_val: int, progress: Callable) -> void:
 	prog = progress
 	bridge_rows = []
-	for r in [48, 92, 128, 164, 208]:
-		bridge_rows.append(roundi(r * Data.K))
 	build_block.resize(n * n)
 	build_block.fill(0)
 	await _gen_types(seed_val)
@@ -43,22 +39,16 @@ func generate(seed_val: int, progress: Callable) -> void:
 	_p(0.6, "جاري بناء سطح الأرض...")
 	await get_tree().process_frame
 	await _build_mesh()
-	_build_water()
-	_p(0.8, "جاري زرع النخيل وبناء الجسور والآثار...")
+	_build_ground()
+	_p(0.8, "جاري زرع النخيل وبناء الآثار...")
 	await get_tree().process_frame
 	await _build_details(seed_val)
 	_p(0.92, "اكتمل تشكيل الخريطة")
 
 
 func set_fog(tex: Texture2D) -> void:
-	var ws: float = n * Data.CELL
-	var w: float = float(n + 1)
-	for m in [terr_mat, water_mat]:
-		m.set_shader_parameter("fog_tex", tex)
-		m.set_shader_parameter("map_size", ws)
-	water_mat.set_shader_parameter("height_tex", height_tex)
-	water_mat.set_shader_parameter("hscale", float(n) / w)
-	water_mat.set_shader_parameter("hoff", 0.5 / w)
+	terr_mat.set_shader_parameter("fog_tex", tex)
+	terr_mat.set_shader_parameter("map_size", n * Data.CELL)
 
 
 func _noise(sd: int, freq: float, oct: int) -> FastNoiseLite:
@@ -71,10 +61,6 @@ func _noise(sd: int, freq: float, oct: int) -> FastNoiseLite:
 	return f
 
 
-func _coast(nc: FastNoiseLite, x: float, y: float) -> float:
-	return (16.0 + nc.get_noise_2d(x, y) * 8.0) * Data.K
-
-
 func _hs(x: int, y: int) -> float:
 	var h: int = (x * 374761393) ^ (y * 668265263)
 	h = (h ^ (h >> 13)) * 1274126177
@@ -83,65 +69,22 @@ func _hs(x: int, y: int) -> float:
 
 func _gen_types(seed_val: int) -> void:
 	var K: float = Data.K
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_val
 	var nb := _noise(seed_val, 0.012, 4)
 	var nd := _noise(seed_val + 11, 0.035, 3)
-	var nl := _noise(seed_val + 21, 0.016, 3)
-	var nc := _noise(seed_val + 31, 0.02, 2)
-	var ph: float = rng.randf() * TAU
-	var ph2: float = rng.randf() * TAU
 	types.resize(n * n)
 	for y in n:
 		if y % 24 == 0:
-			_p(0.02 + 0.26 * float(y) / n, "جاري رسم الأنهار والبحيرات...")
+			_p(0.02 + 0.26 * float(y) / n, "جاري تجهيز الأرض المستوية...")
 			await get_tree().process_frame
-		var cx: float = n * 0.5 + sin(y * 0.045 / K + ph) * 22.0 * K + sin(y * 0.11 / K + ph2) * 7.0 * K
-		var rw: float = (4.2 + 1.2 * sin(y * 0.07 / K + ph2)) * K
 		for x in n:
 			var v: float = (nb.get_noise_2d(x, y) * 0.65 + nd.get_noise_2d(x, y) * 0.35) * 0.5 + 0.5
 			var t := 0
-			if v > 0.67:
-				t = 2
-			elif v < 0.33:
+			if v < 0.33:
 				t = 1
-			var lv: float = nl.get_noise_2d(x, y) * 0.5 + 0.5
-			if lv < 0.2 and t != 2:
-				t = 3
-			var d: float = absf(x - cx)
-			if d < rw:
-				t = 3
-			elif d < rw + 2.5 * K and t == 2:
-				t = 0
-			var ed: int = mini(mini(x, y), mini(n - 1 - x, n - 1 - y))
-			if ed < 40 and float(ed) < _coast(nc, x, y):
-				t = 3
 			if t == 1 and _hs(x, y) > 0.42:
 				t = 5
 			types[idx(x, y)] = t
-	for by in bridge_rows:
-		for y in range(by - 1, by + 2):
-			for x in range(int(26 * K), n - int(26 * K)):
-				var i := idx(x, y)
-				if types[i] == 3:
-					types[i] = 4
-				elif types[i] == 2 or types[i] == 5:
-					types[i] = 0
 	_carve_roads()
-	# توسيع الجسور بخلية حتى تكون عريضة ومكتملة
-	var add: Array = []
-	for y in range(41, n - 41):
-		for x in range(41, n - 41):
-			if types[idx(x, y)] == 3:
-				var near := false
-				for dy in range(-1, 2):
-					for dx in range(-1, 2):
-						if types[idx(x + dx, y + dy)] == 4:
-							near = true
-				if near:
-					add.append(idx(x, y))
-	for i in add:
-		types[i] = 4
 	for b in Data.BASES:
 		var bx: int = b.x + 1
 		var by2: int = b.y + 1
@@ -220,78 +163,10 @@ func _stamp_road(pts: Array) -> void:
 						road_w[i] = maxf(road_w[i], 1.0 - d / 3.4)
 
 
-func _gen_heights(seed_val: int) -> void:
-	var K: float = Data.K
+func _gen_heights(_seed_val: int) -> void:
 	var w := n + 1
 	heights.resize(w * w)
-	var hb := _noise(seed_val + 5, 0.012, 5)
-	var hd := _noise(seed_val + 6, 0.045, 3)
-	var hm := _noise(seed_val + 7, 0.03, 4)
-	var nc := _noise(seed_val + 31, 0.02, 2)
-	var base_c: Array = []
-	for b in Data.BASES:
-		base_c.append(Vector2(b.x + 1.5, b.y + 1.5))
-	var mine_c: Array = []
-	for m in Data.MINES:
-		mine_c.append(Vector2(m.x + 1.0, m.y + 1.0))
-	for j in w:
-		if j % 24 == 0:
-			_p(0.3 + 0.3 * float(j) / w, "جاري تشكيل الجبال والكثبان...")
-			await get_tree().process_frame
-		for i in w:
-			var rock := 0.0
-			var water := 0.0
-			var bridge := 0.0
-			var lmk := 0.0
-			var rd := 0.0
-			var cnt := 0.0
-			for dj in range(-1, 1):
-				for di in range(-1, 1):
-					var cx: int = i + di
-					var cy: int = j + dj
-					if cx < 0 or cy < 0 or cx >= n or cy >= n:
-						continue
-					cnt += 1.0
-					var ci := idx(cx, cy)
-					var t: int = types[ci]
-					rd = maxf(rd, road_w[ci])
-					if t == 2:
-						rock += 1.0
-					elif t == 3:
-						water += 1.0
-					elif t == 4:
-						bridge += 1.0
-					elif t == 6:
-						lmk += 1.0
-			if cnt == 0.0:
-				cnt = 1.0
-			rock /= cnt
-			water /= cnt
-			lmk /= cnt
-			var hh: float = (hb.get_noise_2d(i, j) + 1.0) * 0.5 * 1.3 + (hd.get_noise_2d(i * 0.6, j * 1.0) + 1.0) * 0.5 * 0.45
-			if rock > 0.0:
-				hh += rock * (5.0 + (hm.get_noise_2d(i, j) + 1.0) * 7.0)
-			hh -= water * 2.6
-			if lmk > 0.0:
-				hh = lerpf(hh, 0.6, lmk)
-			if rd > 0.0:
-				hh = lerpf(hh, 0.4, minf(rd * 0.9, 0.9))
-			var pv := Vector2(i, j)
-			var flat := 0.0
-			for bc in base_c:
-				if absf(pv.x - bc.x) < 16.0 and absf(pv.y - bc.y) < 16.0:
-					flat = maxf(flat, clampf(1.0 - (pv.distance_to(bc) - 8.0) / 6.0, 0.0, 1.0))
-			for mc in mine_c:
-				if absf(pv.x - mc.x) < 7.0 and absf(pv.y - mc.y) < 7.0:
-					flat = maxf(flat, clampf(1.0 - (pv.distance_to(mc) - 3.0) / 3.0, 0.0, 1.0))
-			var ed: float = minf(minf(float(i), float(j)), minf(float(n - i), float(n - j)))
-			if ed < 40.0:
-				var depth: float = clampf((_coast(nc, i, j) - ed) / (7.0 * K), 0.0, 1.0)
-				hh -= depth * 5.0
-			hh = lerpf(hh, 0.1, flat)
-			if bridge > 0.0:
-				hh = 0.25
-			heights[j * w + i] = hh
+	heights.fill(FLAT_Y)
 	var img := Image.create_from_data(w, w, false, Image.FORMAT_RF, heights.to_byte_array())
 	img.convert(Image.FORMAT_RH)
 	height_tex = ImageTexture.create_from_image(img)
@@ -424,16 +299,18 @@ func _build_mesh() -> void:
 	add_child(body)
 
 
-func _build_water() -> void:
+# أرض مستوية ممتدة خارج حدود الخريطة بدل البحر القديم
+func _build_ground() -> void:
 	var ws: float = n * Data.CELL
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(5200.0, 5200.0)
-	water_mat = ShaderMaterial.new()
-	water_mat.shader = SHADER_W
+	var gm := StandardMaterial3D.new()
+	gm.albedo_color = Color(0.5, 0.42, 0.29)
+	gm.roughness = 1.0
 	var mi := MeshInstance3D.new()
 	mi.mesh = pm
-	mi.material_override = water_mat
-	mi.position = Vector3(ws * 0.5, WATER_Y, ws * 0.5)
+	mi.material_override = gm
+	mi.position = Vector3(ws * 0.5, FLAT_Y - 0.08, ws * 0.5)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 
@@ -612,7 +489,7 @@ func _build_details(seed_val: int) -> void:
 	var tn := _noise(seed_val + 77, 0.05, 2)
 	for y in n:
 		if y % 30 == 0:
-			_p(0.8 + 0.1 * float(y) / n, "جاري زرع النخيل وبناء الجسور والآثار...")
+			_p(0.8 + 0.1 * float(y) / n, "جاري زرع النخيل وبناء الآثار...")
 			await get_tree().process_frame
 		for x in n:
 			var ci := idx(x, y)
@@ -710,7 +587,7 @@ func _build_details(seed_val: int) -> void:
 	py.radial_segments = 6
 	_flush(pylons, py, _veg_mat(false), 300.0, false)
 	for lm in landmarks:
-		_ziggurat(Vector3((lm.x + 2.5) * Data.CELL, 0.6, (lm.y + 2.5) * Data.CELL))
+		_ziggurat(Vector3((lm.x + 2.5) * Data.CELL, FLAT_Y, (lm.y + 2.5) * Data.CELL))
 	_ruins(rng)
 
 
