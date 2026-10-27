@@ -1,6 +1,6 @@
 class_name Ai
 extends Node
-## ذكاء جيش الحاسوب (عدو أو حليف): يجمع الذهب بالشاحنات، يبني مقرات وقواعد، ويرسل موجات هجوم.
+## ذكاء جيش الحاسوب (عدو أو حليف): يجمع الذهب بالشاحنات، يبني مقرات وقواعد، ويرسل موجات هجوم، ويدافع عن فريقه.
 ## يوجد جسم واحد لكل جيش حاسوب. slot = رقم الجيش (1..3).
 
 var g: Main
@@ -8,6 +8,7 @@ var slot := 1
 var t := 0.0
 var bt := 10.0
 var wt := 0.0
+var dt := 0.0
 
 
 func reset() -> void:
@@ -30,6 +31,10 @@ func tick(delta: float) -> void:
 	if wt >= 3.0:
 		wt = 0.0
 		_attack(cf)
+	dt += delta
+	if dt >= 2.0:
+		dt = 0.0
+		_defend()
 
 
 func _mine_list(ty: String) -> Array:
@@ -47,10 +52,10 @@ func _pick_vehicle(tech: int) -> String:
 
 func _pick_inf(tech: int) -> String:
 	if tech == 0:
-		return "inf"
+		return ["inf", "inf", "inf", "mg"].pick_random()
 	if tech == 1:
-		return ["inf", "inf", "rpg"].pick_random()
-	return ["inf", "rpg", "rpg", "sniper"].pick_random()
+		return ["inf", "inf", "mg", "rpg"].pick_random()
+	return ["inf", "mg", "rpg", "rpg", "sniper", "cmd"].pick_random()
 
 
 func _train(cf: Dictionary) -> void:
@@ -123,6 +128,30 @@ func _attack(cf: Dictionary) -> void:
 		u.sent = true
 		u.amove = true
 		u.dest = tb.cell + Vector2i(1, 1)
+		u.goto_cell(u.dest)
+
+
+# دفاع: عند تعرض مبنى لي أو لحليفي للهجوم تتحرك الوحدات الحرة (والقاذفات) إلى مكان الهجوم
+func _defend() -> void:
+	var th = Threats.latest(g, slot)
+	if th == null:
+		return
+	var tpos: Vector3 = th["pos"]
+	var tc: Vector2i = g.world_to_cell(tpos)
+	var own_base: bool = int(th["owner"]) == slot
+	for u in g.units:
+		if u.team != slot or u.dead or u.is_truck:
+			continue
+		if u.tgt != null and is_instance_valid(u.tgt) and not u.tgt.dead:
+			continue
+		if u.sent and not own_base:
+			continue
+		if Vector2(u.position.x - tpos.x, u.position.z - tpos.z).length() < 16.0:
+			continue
+		if u.dest.x >= 0 and Vector2(u.dest).distance_to(Vector2(tc)) < 8.0 and (u.amove or not u.path.is_empty()):
+			continue
+		u.amove = true
+		u.dest = tc + Vector2i(randi_range(-3, 3), randi_range(-3, 3))
 		u.goto_cell(u.dest)
 
 
