@@ -131,8 +131,10 @@ func take_damage(dm: float, from_team: int) -> void:
 	if dead:
 		return
 	hp -= dm
-	if g.friendly(team) and g.hostile(from_team, team):
-		g.notify_attack(self)
+	if g.hostile(from_team, team):
+		Threats.add(self, from_team)
+		if g.friendly(team):
+			g.notify_attack(self)
 	if hit_cd <= 0.0 and (g.friendly(team) or visible):
 		hit_cd = 0.14
 		var rr: float = size * Data.CELL * 0.4
