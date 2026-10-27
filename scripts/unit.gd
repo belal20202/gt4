@@ -80,7 +80,7 @@ func setup(main: Main, t: String, tm: int, pos: Vector3) -> void:
 	stuck_ref = position
 	var c := Vector3(Data.MAP * Data.CELL * 0.5, 0, Data.MAP * Data.CELL * 0.5)
 	rotation.y = atan2(c.x - pos.x, c.z - pos.z)
-	model = Models.unit_model(t, a["color"])
+	model = ModelsEx.unit_model(t, a["color"])
 	add_child(model)
 	turret = model.get_node_or_null("Turret")
 	rotor = model.get_node_or_null("Rotor")
@@ -458,11 +458,16 @@ func _logic(delta: float) -> void:
 	if tgt != null and noair and tgt.kind == "u" and tgt.is_air:
 		tgt = null
 		forced = false
+	var reach: float = 9.0
+	if type == "bomber":
+		reach = 22.0
+	if tgt == null and type == "bomber" and team == 0 and not amove and path.is_empty():
+		_scramble(delta)
 	if tgt == null and (amove or path.is_empty()):
 		scan_t -= delta
 		if scan_t <= 0.0:
 			scan_t = 0.3 + randf() * 0.15
-			var r: float = (float(def["range"]) + (2.5 if amove else 3.0)) * Data.CELL
+			var r: float = (float(def["range"]) + (2.5 if amove else 3.0) + (12.0 if type == "bomber" else 0.0)) * Data.CELL
 			var e = g.nearest_enemy(position, team, r, not noair, type == "aa" or type == "jet")
 			if e != null:
 				tgt = e
@@ -473,7 +478,7 @@ func _logic(delta: float) -> void:
 		var dist: float = dv.length() - float(tgt.radius_w())
 		ta = atan2(dv.x, dv.y)
 		if dist > rng_w:
-			if dist > (float(def["range"]) + 9.0) * Data.CELL and not forced:
+			if dist > (float(def["range"]) + reach) * Data.CELL and not forced:
 				tgt = null
 			else:
 				rp -= delta
@@ -498,6 +503,22 @@ func _logic(delta: float) -> void:
 			dest = Vector2i(-1, -1)
 
 
+# قاذفة اللاعب تهبّ للدفاع تلقائياً عندما يتعرض مبنى لي أو لحليفي للهجوم
+func _scramble(delta: float) -> void:
+	wait -= delta
+	if wait > 0.0:
+		return
+	wait = 1.0
+	var th = Threats.latest(g, team)
+	if th == null:
+		return
+	var e = g.nearest_enemy(th["pos"], team, 30.0 * Data.CELL, false)
+	if e != null:
+		tgt = e
+		forced = true
+		path = []
+
+
 func _fire(target) -> void:
 	var a: Dictionary = Data.ARMIES[g.army_of[team]]
 	var cls_t: String = "bld" if target.kind == "b" else str(target.def["cls"])
@@ -517,5 +538,25 @@ func _fire(target) -> void:
 	if vis_ok:
 		g.muzzle_flash(muzzle, big)
 	target.take_damage(dm, team)
+	if type == "bomber":
+		_bomb_splash(target, dm)
 	if vis_ok:
 		Sfx.play("cannon" if (type == "tank" or type == "heavy" or type == "art" or type == "rpg" or type == "bomber") else "shot")
+
+
+# انفجار القنبلة يصيب ما حول الهدف (بنصف الضرر) فتفيد القاذفة ضد الأرتال والمباني المتجمعة
+func _bomb_splash(target, dm: float) -> void:
+	var c: Vector3 = target.center()
+	var rr: float = 6.0
+	for u in g.units.duplicate():
+		if u == target or u.dead or u.is_air or not g.hostile(u.team, team):
+			continue
+		if Vector2(u.position.x - c.x, u.position.z - c.z).length() <= rr:
+			u.take_damage(dm * 0.5, team)
+	for b in g.blds.duplicate():
+		if b == target or b.dead or not g.hostile(b.team, team):
+			continue
+		if Vector2(b.position.x - c.x, b.position.z - c.z).length() - b.radius_w() <= rr:
+			b.take_damage(dm * 0.5, team)
+	if g.friendly(team) or g.is_vis(c):
+		g.explosion(c + Vector3(0, 0.6, 0), false)
