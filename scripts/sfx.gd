@@ -518,3 +518,14 @@ func _loop_steps() -> PackedFloat32Array:
 		for i in blen:
 			out[s0 + i] = nz[s0 + i] * 2.2 * exp(-9.0 * float(i) / float(blen))
 	return out
+
+
+func _loop_air() -> PackedFloat32Array:
+	var n := int(1.0 * RATE)
+	var nz := _lp(n, 0.12)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		out[i] = nz[i] * 1.2 * (0.5 + 0.5 * sin(TAU * 16.0 * t)) + sin(TAU * 70.0 * t) * 0.08
+	return _loop_fix(out, 0.05)
