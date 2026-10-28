@@ -5,6 +5,8 @@ extends Main
 ## - توزيع نقاط الوصول بحيث لا تتزاحم المجموعة على نفس المكان
 ## - تنبيه منفصل لهجوم على مدينتك وهجوم على مدينة حليفك
 ## - تسجيل الهجمات ليدافع الحلفاء (وقاذفاتك) تلقائياً
+## - تطبيق إعدادات الجودة والصورة، وعدم نزول شاحنة ذهب تلقائياً للاعب في بداية المباراة
+## - منع البناء قرب الأشجار أو في مناطق لم تُكشف بعد (مع هامش خلية)
 
 var alert_cd_ally := 0.0
 
@@ -25,6 +27,90 @@ func _ready() -> void:
 		for x in range(-14, 15):
 			spiral.append(Vector2i(x, y))
 	spiral.sort_custom(func(a, b): return a.length_squared() < b.length_squared())
+	GameSettings.apply(self)
+
+
+# تُستدعى بعد توليد التضاريس: نطبّق الجودة على الأشجار والماء أيضاً
+func _setup_fog() -> void:
+	super._setup_fog()
+	GameSettings.apply(self)
+
+
+# بداية المباراة: مقر ومقر ذهب وثكنة وثلاثة مشاة. لا تنزل شاحنة ذهب تلقائياً للاعب (يدرّبها بنفسه)
+func _spawn_initial() -> void:
+	var half: int = Data.MAP / 2
+	for o in players:
+		var b: Vector2i = Data.BASES[o]
+		var low: bool = b.y > half
+		var dep_off := Vector2i(0, -6) if low else Vector2i(0, 6)
+		var bar_off := Vector2i(5, 0) if b.x < half else Vector2i(-5, 0)
+		add_building("hq", o, b, true)
+		add_building("dep", o, b + dep_off, true)
+		add_building("bar", o, b + bar_off, true)
+		if hostile(o, 0):
+			add_building("fac", o, b + Vector2i(bar_off.x, -4 if low else 4), true)
+		var hq = find_hq(o)
+		var p: Vector3 = free_spot(hq)
+		for i in 3:
+			spawn_unit("inf", o, spawn_pos_near(p, "inf"))
+		if o == 0:
+			continue
+		for bd in blds:
+			if bd.team == o and bd.type == "dep":
+				spawn_unit("truck", o, spawn_pos_near(free_spot(bd), "truck"))
+
+
+# ---------- البناء: لا أشجار ولا مناطق غير مكتشفة ----------
+func can_place(owner_slot: int, type: String, c: Vector2i) -> bool:
+	if not super.can_place(owner_slot, type, c):
+		return false
+	if owner_slot != 0:
+		return true
+	var s: int = int(Data.BUILDINGS[type]["size"])
+	var n: int = Data.MAP
+	for y in range(c.y - 1, c.y + s + 1):
+		for x in range(c.x - 1, c.x + s + 1):
+			if x < 0 or y < 0 or x >= n or y >= n:
+				continue
+			if explored[y * n + x] == 0:
+				return false
+	return true
+
+
+func _no_build_reason(c: Vector2i) -> String:
+	var s: int = int(Data.BUILDINGS[place_type]["size"])
+	var n: int = Data.MAP
+	for y in range(c.y - 1, c.y + s + 1):
+		for x in range(c.x - 1, c.x + s + 1):
+			if x >= 0 and y >= 0 and x < n and y < n and explored[y * n + x] == 0:
+				return "لا يمكن البناء في منطقة لم تُكشف بعد"
+	for y in range(c.y, c.y + s):
+		for x in range(c.x, c.x + s):
+			if x < 0 or y < 0 or x >= n or y >= n:
+				return "خارج حدود الخريطة"
+			var t: int = terrain.types[y * n + x]
+			if t == 3 or t == 4:
+				return "لا يمكن البناء على الماء أو الجسور"
+			if t == 5 or terrain.build_block[y * n + x] == 1:
+				return "لا يمكن البناء قرب الأشجار"
+	return "لا يمكن البناء هنا، ابنِ بالقرب من مبانيك على أرض خالية"
+
+
+func try_place(gp: Vector3) -> void:
+	var cost: float = float(Data.BUILDINGS[place_type]["cost"])
+	if gold[0] < cost:
+		hud.toast("الذهب غير كافٍ")
+		Sfx.play("bad")
+		return
+	var c := _place_cell(gp, place_type)
+	if not can_place(0, place_type, c):
+		hud.toast(_no_build_reason(c))
+		Sfx.play("bad")
+		return
+	gold[0] -= cost
+	add_building(place_type, 0, c, false)
+	Sfx.play("place")
+	clear_selection()
 
 
 func _clear_world() -> void:
