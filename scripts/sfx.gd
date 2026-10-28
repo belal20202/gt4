@@ -42,9 +42,10 @@ func _ready() -> void:
 
 
 func _build_sfx() -> void:
-	streams["click"] = _wav(_wood(620.0, 0.06, 0.45))
-	streams["ok"] = _wav(_mix(_pluck(392.0, 0.35, 0.5), _pluck(587.0, 0.4, 0.45), 0.09))
-	streams["bad"] = _wav(_thud(130.0, 60.0, 0.3, 0.6))
+	# أصوات الواجهة: نغمات ناعمة تشبه الكالمبا والجرس الزجاجي بدل النقرات الخشبية الجافة
+	streams["click"] = _wav(_mix(_chime(880.0, 0.2, 0.34), _chime(1320.0, 0.14, 0.12), 0.012))
+	streams["ok"] = _wav(_arp([659.25, 830.61, 987.77], 0.07, 0.3, 0.3))
+	streams["bad"] = _wav(_arp([329.63, 261.63], 0.1, 0.32, 0.3))
 	streams["place"] = _wav(_mix(_thud(95.0, 50.0, 0.28, 0.8), _noise_lp(0.12, 0.5, 0.25, 18.0), 0.0))
 	streams["built"] = _wav(_mix(_mix(_pluck(293.66, 0.5, 0.5), _pluck(370.0, 0.5, 0.45), 0.12), _pluck(440.0, 0.7, 0.45), 0.24))
 	streams["deliver"] = _wav(_mix(_bell(1320.0, 0.35, 0.22), _bell(1760.0, 0.3, 0.18), 0.06))
@@ -92,14 +93,14 @@ func _build_extra() -> void:
 		_add(rp, _bell(1500.0 + 220.0 * float(k), 0.18, 0.12), int(float(k) * 0.12 * RATE))
 	streams["repair"] = _wav(rp)
 	# أصوات الاختيار: لكل جيش نغمة خاصة
-	streams["pick_red"] = _wav(_mix(_horn(196.0, 0.5, 0.3), _thud(110.0, 50.0, 0.3, 0.7), 0.0))
-	streams["pick_blue"] = _wav(_mix(_mix(_pluck(293.66, 0.6, 0.5), _pluck(370.0, 0.6, 0.45), 0.04), _pluck(440.0, 0.7, 0.45), 0.08))
-	streams["pick_yellow"] = _wav(_mix(_mix(_bell(660.0, 0.5, 0.25), _bell(990.0, 0.45, 0.22), 0.07), _thud(130.0, 60.0, 0.2, 0.5), 0.0))
-	streams["pick_white"] = _wav(_mix(_ney(392.0, 0.35, 0.35), _ney(523.25, 0.4, 0.35), 0.2))
-	streams["pick_mode"] = _wav(_mix(_wood(500.0, 0.05, 0.5), _wood(700.0, 0.06, 0.5), 0.07))
-	streams["diff_easy"] = _wav(_pluck(440.0, 0.4, 0.5))
-	streams["diff_normal"] = _wav(_mix(_thud(150.0, 70.0, 0.25, 0.7), _pluck(330.0, 0.4, 0.4), 0.05))
-	streams["diff_hard"] = _wav(_mix(_thud(90.0, 40.0, 0.5, 0.9), _horn(146.83, 0.5, 0.3), 0.05))
+	streams["pick_red"] = _wav(_mix(_arp([293.66, 440.0, 587.33], 0.07, 0.34, 0.3), _thud(110.0, 60.0, 0.2, 0.22), 0.0))
+	streams["pick_blue"] = _wav(_arp([329.63, 493.88, 659.25, 987.77], 0.065, 0.34, 0.28))
+	streams["pick_yellow"] = _wav(_mix(_arp([392.0, 587.33, 783.99], 0.07, 0.36, 0.28), _bell(1568.0, 0.4, 0.1), 0.14))
+	streams["pick_white"] = _wav(_mix(_ney(392.0, 0.3, 0.26), _arp([523.25, 698.46], 0.1, 0.36, 0.22), 0.06))
+	streams["pick_mode"] = _wav(_arp([740.0, 987.77], 0.07, 0.24, 0.28))
+	streams["diff_easy"] = _wav(_arp([783.99, 1174.66], 0.08, 0.3, 0.28))
+	streams["diff_normal"] = _wav(_mix(_arp([587.33, 740.0, 880.0], 0.07, 0.3, 0.28), _thud(150.0, 80.0, 0.16, 0.18), 0.0))
+	streams["diff_hard"] = _wav(_mix(_arp([440.0, 349.23, 293.66], 0.09, 0.4, 0.3), _thud(90.0, 45.0, 0.4, 0.4), 0.0))
 	var st := PackedFloat32Array()
 	st.resize(int(1.3 * RATE))
 	for k in range(8):
@@ -110,7 +111,7 @@ func _build_extra() -> void:
 	_add(st, _thud(100.0, 45.0, 0.5, 0.8), int(0.4 * RATE))
 	streams["start"] = _wav(st)
 	streams["go"] = _wav(_mix(_horn(293.66, 0.3, 0.3), _horn(440.0, 0.5, 0.32), 0.15))
-	streams["tick"] = _wav(_wood(900.0, 0.03, 0.35))
+	streams["tick"] = _wav(_chime(1175.0, 0.09, 0.2))
 	streams["saved"] = _wav(_mix(_bell(1046.0, 0.3, 0.25), _bell(1568.0, 0.4, 0.22), 0.08))
 	streams["repaired"] = _wav(_mix(_bell(880.0, 0.5, 0.3), _bell(1320.0, 0.5, 0.28), 0.1))
 
@@ -281,6 +282,29 @@ func _wood(f: float, dur: float, vol: float) -> PackedFloat32Array:
 		p1 += TAU * f / RATE
 		p2 += TAU * f * 2.4 / RATE
 		out[i] = (sin(p1) * 0.8 + sin(p2) * 0.35) * vol * exp(-14.0 * t)
+	return out
+
+
+# نغمة ناعمة: هجوم قصير جداً وتلاشٍ سلس مع جهير ثانٍ خافت (إحساس الكالمبا/الجرس الزجاجي)
+func _chime(f: float, dur: float, vol: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var decay: float = 5.5 / maxf(dur, 0.05)
+	for i in n:
+		var t := float(i) / RATE
+		var att: float = minf(t / 0.004, 1.0)
+		var env: float = att * exp(-decay * t)
+		out[i] = (sin(TAU * f * t) + 0.28 * sin(TAU * f * 2.0 * t) * exp(-9.0 * t) + 0.08 * sin(TAU * f * 3.01 * t) * exp(-14.0 * t)) * env * vol
+	return out
+
+
+# أرابيج من عدة نغمات متتالية: step ثواني بين النغمة والتالية
+func _arp(notes: Array, step: float, dur: float, vol: float) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(int((step * float(notes.size()) + dur) * RATE))
+	for k in notes.size():
+		_add(out, _chime(float(notes[k]), dur, vol), int(float(k) * step * RATE))
 	return out
 
 
@@ -494,14 +518,3 @@ func _loop_steps() -> PackedFloat32Array:
 		for i in blen:
 			out[s0 + i] = nz[s0 + i] * 2.2 * exp(-9.0 * float(i) / float(blen))
 	return out
-
-
-func _loop_air() -> PackedFloat32Array:
-	var n := int(1.0 * RATE)
-	var nz := _lp(n, 0.12)
-	var out := PackedFloat32Array()
-	out.resize(n)
-	for i in n:
-		var t := float(i) / RATE
-		out[i] = nz[i] * 1.2 * (0.5 + 0.5 * sin(TAU * 16.0 * t)) + sin(TAU * 70.0 * t) * 0.08
-	return _loop_fix(out, 0.05)
