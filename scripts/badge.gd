@@ -1,61 +1,56 @@
 class_name IraqBadge
 extends Control
-## شارة «صنع في العراق»: لوحة داكنة بإطار ذهبي وشريط بألوان العلم العراقي، ومعها أيقونة اللعبة اختيارياً.
+## عبارة «صنع في العراق» فقط: نص ذهبي واضح وأنيق بزخرفة خطية، بلا شعار ولا علم.
+## تُستخدم في القائمة الرئيسية فقط، ولا تظهر أثناء اللعب.
 
-const EMBLEM_PATH := "res://assets/emblem.png"
 const GOLD := Color(0.96, 0.7, 0.18)
-const FLAG_RED := Color(0.81, 0.07, 0.15)
-const FLAG_WHITE := Color(0.97, 0.97, 0.97)
-const FLAG_BLACK := Color(0.04, 0.04, 0.04)
-const STRIPE := 3.0
+const GOLD_LIGHT := Color(1.0, 0.9, 0.56)
 
-var plate := Rect2()
+var text_h := 0.0
 
 
-# s: حجم الأيقونة (أو مقياس اللوحة عند عدم وجودها). with_emblem: إظهار الأيقونة. with_label: إظهار اللوحة والنص.
-func setup(s: float, with_emblem := false, with_label := true) -> IraqBadge:
+# المعاملات القديمة (s, with_emblem, with_label) محفوظة للتوافق، ولا تُستخدم الأيقونة ولا اللوحة بعد الآن.
+func setup(s: float, _with_emblem := false, _with_label := true) -> IraqBadge:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var fs: int = clampi(int(s * 0.24), 14, 34) if with_emblem else clampi(int(s * 0.3), 14, 34)
-	var th: float = STRIPE * 3.0 + float(fs) * 1.6 + 6.0 if with_label else 0.0
-	var w: float = s * 2.0 if with_emblem else s * 3.2
-	var ih: float = s + 6.0 if with_emblem else 0.0
-	custom_minimum_size = Vector2(w, ih + th)
+	var fs: int = clampi(int(s * 0.36), 22, 36)
+	var w: float = float(fs) * 7.4 + 30.0
+	var h: float = float(fs) * 1.5 + 22.0
+	custom_minimum_size = Vector2(w, h)
 	size = custom_minimum_size
-	if with_emblem:
-		var tr := TextureRect.new()
-		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		if ResourceLoader.exists(EMBLEM_PATH):
-			tr.texture = load(EMBLEM_PATH)
-		tr.size = Vector2(s, s)
-		tr.position = Vector2((w - s) * 0.5, 0.0)
-		add_child(tr)
-	if with_label:
-		plate = Rect2(0.0, ih, w, th)
-		var lbl := Label.new()
-		lbl.text = "صنع في العراق"
-		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lbl.position = Vector2(0.0, ih + STRIPE * 3.0 + 2.0)
-		lbl.size = Vector2(w, th - STRIPE * 3.0 - 4.0)
-		lbl.add_theme_font_size_override("font_size", fs)
-		lbl.add_theme_color_override("font_color", Color(1.0, 0.93, 0.7))
-		lbl.add_theme_color_override("font_outline_color", Color(0.1, 0.06, 0.02, 0.95))
-		lbl.add_theme_constant_override("outline_size", maxi(3, int(fs * 0.2)))
-		add_child(lbl)
+	var lbl := Label.new()
+	lbl.text = "صنع في العراق"
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.position = Vector2(0.0, 3.0)
+	lbl.size = Vector2(w, float(fs) * 1.5 + 4.0)
+	lbl.add_theme_font_size_override("font_size", fs)
+	lbl.add_theme_color_override("font_color", GOLD_LIGHT)
+	lbl.add_theme_color_override("font_outline_color", Color(0.22, 0.13, 0.02, 0.98))
+	lbl.add_theme_constant_override("outline_size", maxi(5, int(float(fs) * 0.26)))
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	lbl.add_theme_constant_override("shadow_offset_y", 2)
+	add_child(lbl)
+	text_h = float(fs) * 1.5 + 4.0
 	queue_redraw()
 	return self
 
 
 func _draw() -> void:
-	if plate.size.y <= 0.0:
+	if text_h <= 0.0:
 		return
-	var p := plate.position
-	var w := plate.size.x
-	draw_rect(plate, Color(0.04, 0.06, 0.07, 0.94))
-	draw_rect(Rect2(p.x + 2.0, p.y + 2.0, w - 4.0, STRIPE), FLAG_RED)
-	draw_rect(Rect2(p.x + 2.0, p.y + 2.0 + STRIPE, w - 4.0, STRIPE), FLAG_WHITE)
-	draw_rect(Rect2(p.x + 2.0, p.y + 2.0 + STRIPE * 2.0, w - 4.0, STRIPE), FLAG_BLACK)
-	draw_rect(plate, GOLD, false, 2.0)
+	var w: float = size.x
+	var y: float = text_h + 11.0
+	var cx: float = w * 0.5
+	# خط ذهبي متدرج الشفافية نحو الأطراف مع معين صغير في الوسط
+	var segs := 24
+	for i in range(segs):
+		var t0: float = float(i) / float(segs)
+		var t1: float = float(i + 1) / float(segs)
+		var a: float = 1.0 - absf(t0 + 0.5 / float(segs) - 0.5) * 2.0
+		var col := Color(GOLD.r, GOLD.g, GOLD.b, clampf(a * 1.1, 0.0, 1.0))
+		draw_line(Vector2(w * 0.06 + (w * 0.88) * t0, y), Vector2(w * 0.06 + (w * 0.88) * t1, y), col, 2.0)
+	var d := 5.0
+	draw_colored_polygon(PackedVector2Array([Vector2(cx, y - d), Vector2(cx + d, y), Vector2(cx, y + d), Vector2(cx - d, y)]), GOLD)
+	draw_colored_polygon(PackedVector2Array([Vector2(cx - 18.0, y), Vector2(cx - 12.0, y - 3.0), Vector2(cx - 12.0, y + 3.0)]), GOLD)
+	draw_colored_polygon(PackedVector2Array([Vector2(cx + 18.0, y), Vector2(cx + 12.0, y - 3.0), Vector2(cx + 12.0, y + 3.0)]), GOLD)
