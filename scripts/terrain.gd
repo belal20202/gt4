@@ -1,11 +1,13 @@
 class_name Terrain
 extends Node3D
-## تضاريس 3D مستوية بالكامل: لا ماء ولا جبال ولا مرتفعات. أرض رملية وعشب وغابات نخيل وطرق وآثار.
+## تضاريس 3D: أرض مستوية بالكامل (بلا جبال ولا مرتفعات) يحيط بها بحر واقعي، مع بضع بحيرات تعبرها جسور، وأشجار فقط.
 ## الأنواع: 0 رمل، 1 عشب، 2 صخر، 3 ماء، 4 جسر، 5 غابة، 6 معلم أثري
 ## build_block: 1 = لا يمكن البناء (شجر أو حجر أو أثر)
 
 const SHADER_T := preload("res://shaders/terrain.gdshader")
-const FLAT_Y := 1.0   # ارتفاع الأرض الثابت (فوق حدّ الرطوبة في الشيدر فلا تظهر الأرض داكنة)
+const SHADER_W := preload("res://shaders/water.gdshader")
+const FLAT_Y := 1.0   # ارتفاع الأرض الثابت
+const WATER_Y := 0.0  # مستوى سطح الماء
 const CHUNK := 64.0
 
 var n: int = Data.MAP
@@ -14,6 +16,7 @@ var heights := PackedFloat32Array()
 var road_w := PackedFloat32Array()
 var build_block := PackedByteArray()
 var terr_mat: ShaderMaterial
+var water_mat: ShaderMaterial
 var height_tex: ImageTexture
 var landmarks: Array = []
 var bridge_rows: Array = []
@@ -39,16 +42,18 @@ func generate(seed_val: int, progress: Callable) -> void:
 	_p(0.6, "جاري بناء سطح الأرض...")
 	await get_tree().process_frame
 	await _build_mesh()
-	_build_ground()
-	_p(0.8, "جاري زرع النخيل وبناء الآثار...")
+	_build_water()
+	_p(0.8, "جاري زرع الأشجار وبناء الجسور...")
 	await get_tree().process_frame
 	await _build_details(seed_val)
 	_p(0.92, "اكتمل تشكيل الخريطة")
 
 
 func set_fog(tex: Texture2D) -> void:
-	terr_mat.set_shader_parameter("fog_tex", tex)
-	terr_mat.set_shader_parameter("map_size", n * Data.CELL)
+	for m in [terr_mat, water_mat]:
+		if m != null:
+			m.set_shader_parameter("fog_tex", tex)
+			m.set_shader_parameter("map_size", n * Data.CELL)
 
 
 func _noise(sd: int, freq: float, oct: int) -> FastNoiseLite:
@@ -71,10 +76,16 @@ func _gen_types(seed_val: int) -> void:
 	var K: float = Data.K
 	var nb := _noise(seed_val, 0.012, 4)
 	var nd := _noise(seed_val + 11, 0.035, 3)
+	var nc := _noise(seed_val + 23, 0.03, 3)
+	var nl := _noise(seed_val + 37, 0.06, 2)
+	# بحيرات قليلة: x, y, نصف القطر الأفقي، نصف القطر العمودي (بإحداثيات الخريطة الأساسية 256)
+	var lakes: Array = []
+	for l in [[128, 128, 15, 11], [80, 92, 11, 8], [174, 162, 11, 8], [100, 52, 10, 7], [154, 202, 10, 7]]:
+		lakes.append([roundi(l[0] * K), roundi(l[1] * K), maxf(l[2] * K, 4.0), maxf(l[3] * K, 4.0)])
 	types.resize(n * n)
 	for y in n:
 		if y % 24 == 0:
-			_p(0.02 + 0.26 * float(y) / n, "جاري تجهيز الأرض المستوية...")
+			_p(0.02 + 0.26 * float(y) / n, "جاري تشكيل البحر والبحيرات...")
 			await get_tree().process_frame
 		for x in n:
 			var v: float = (nb.get_noise_2d(x, y) * 0.65 + nd.get_noise_2d(x, y) * 0.35) * 0.5 + 0.5
@@ -83,8 +94,27 @@ func _gen_types(seed_val: int) -> void:
 				t = 1
 			if t == 1 and _hs(x, y) > 0.42:
 				t = 5
+			# البحر المحيط بالخريطة بشاطئ متعرج
+			var ed: int = mini(mini(x, y), mini(n - 1 - x, n - 1 - y))
+			var coast: float = (11.0 + (nc.get_noise_2d(x, y) * 0.5 + 0.5) * 7.0) * K
+			if float(ed) < coast:
+				t = 3
+			else:
+				var thr: float = 0.78 + 0.34 * (nl.get_noise_2d(x, y) * 0.5 + 0.5)
+				for lk in lakes:
+					var dx: float = (float(x) - float(lk[0])) / float(lk[2])
+					var dy: float = (float(y) - float(lk[1])) / float(lk[3])
+					if dx * dx + dy * dy < thr:
+						t = 3
+						break
 			types[idx(x, y)] = t
 	_carve_roads()
+	# جسر عبر كل بحيرة (بالتناوب أفقي وعمودي) لتعبرها الجنود
+	for k in lakes.size():
+		var lk: Array = lakes[k]
+		_lake_bridge(int(lk[0]), int(lk[1]), int(lk[2]), int(lk[3]), k % 2 == 1)
+	if lakes.size() > 0:
+		_lake_bridge(int(lakes[0][0]), int(lakes[0][1]), int(lakes[0][2]), int(lakes[0][3]), true)
 	for b in Data.BASES:
 		var bx: int = b.x + 1
 		var by2: int = b.y + 1
@@ -98,19 +128,23 @@ func _gen_types(seed_val: int) -> void:
 				if x >= 0 and y >= 0 and x < n and y < n:
 					types[idx(x, y)] = 0
 	landmarks = []
-	for lm in [Vector2i(66, 142), Vector2i(188, 112), Vector2i(60, 70), Vector2i(194, 184), Vector2i(128, 20), Vector2i(128, 232), Vector2i(100, 100), Vector2i(160, 156)]:
-		var p := Vector2i(roundi(lm.x * K), roundi(lm.y * K))
-		var ok := true
-		for b in Data.BASES:
-			if Vector2(p).distance_to(Vector2(b)) < 40.0:
-				ok = false
-		if ok:
-			landmarks.append(p)
-	for lm in landmarks:
-		for y in range(lm.y, lm.y + 5):
-			for x in range(lm.x, lm.x + 5):
-				types[idx(x, y)] = 6
-				build_block[idx(x, y)] = 1
+
+
+# جسر بعرض 5 خلايا يمر بمركز البحيرة ويمتد لليابسة على الطرفين
+func _lake_bridge(cx: int, cy: int, rx: int, ry: int, vertical: bool) -> void:
+	var half_len: int = (ry if vertical else rx) + 7
+	for k in range(-half_len, half_len + 1):
+		for w in range(-2, 3):
+			var x: int = (cx + w) if vertical else (cx + k)
+			var y: int = (cy + k) if vertical else (cy + w)
+			if x < 1 or y < 1 or x >= n - 1 or y >= n - 1:
+				continue
+			var i := idx(x, y)
+			if types[i] == 3:
+				types[i] = 4
+			elif types[i] == 5 or types[i] == 2:
+				types[i] = 0
+			road_w[i] = maxf(road_w[i], 0.6)
 
 
 func _sv(a: Array) -> Array:
@@ -163,10 +197,44 @@ func _stamp_road(pts: Array) -> void:
 						road_w[i] = maxf(road_w[i], 1.0 - d / 3.4)
 
 
+# أرض مستوية تماماً. الماء ينخفض بانحدار هادئ (بدون جروف) ويبقى الجسر بمستوى الأرض.
 func _gen_heights(_seed_val: int) -> void:
 	var w := n + 1
+	var pad := 3
+	var pw: int = n + pad * 2
+	var sw: int = pw + 1
+	var sat := PackedInt32Array()
+	sat.resize(sw * sw)
+	for y in pw:
+		var row := 0
+		for x in pw:
+			var cx: int = x - pad
+			var cy: int = y - pad
+			var wv := 1
+			if cx >= 0 and cy >= 0 and cx < n and cy < n:
+				wv = 1 if types[idx(cx, cy)] == 3 else 0
+			row += wv
+			sat[(y + 1) * sw + (x + 1)] = sat[y * sw + (x + 1)] + row
 	heights.resize(w * w)
-	heights.fill(FLAT_Y)
+	for j in w:
+		for i in w:
+			var x0: int = i - 2 + pad
+			var y0: int = j - 2 + pad
+			var x1: int = x0 + 4
+			var y1: int = y0 + 4
+			var sum: int = sat[y1 * sw + x1] - sat[y0 * sw + x1] - sat[y1 * sw + x0] + sat[y0 * sw + x0]
+			var m: float = float(sum) / 16.0
+			var hh: float = FLAT_Y - 3.2 * smoothstep(0.3, 1.0, m)
+			var br := false
+			for dj in range(-1, 1):
+				for di in range(-1, 1):
+					var cx2: int = i + di
+					var cy2: int = j + dj
+					if cx2 >= 0 and cy2 >= 0 and cx2 < n and cy2 < n and types[idx(cx2, cy2)] == 4:
+						br = true
+			if br:
+				hh = FLAT_Y
+			heights[j * w + i] = hh
 	var img := Image.create_from_data(w, w, false, Image.FORMAT_RF, heights.to_byte_array())
 	img.convert(Image.FORMAT_RH)
 	height_tex = ImageTexture.create_from_image(img)
@@ -256,10 +324,10 @@ func _build_mesh() -> void:
 					cnt += 1.0
 			c = c / maxf(cnt, 1.0)
 			c = c.lerp(Color(0.64, 0.52, 0.35), rd * 0.7)
-			if hh < 3.0:
-				c = c * (0.9 + clampf(hh / 2.5, 0.0, 1.0) * 0.18)
+			if hh < WATER_Y:
+				c = c.lerp(Color(0.2, 0.36, 0.36), clampf(-hh / 2.6, 0.0, 0.75))
 			else:
-				c = c.lerp(Color(0.72, 0.62, 0.49), clampf((hh - 3.0) / 16.0, 0.0, 0.5))
+				c = c * (0.94 + clampf(hh / 2.5, 0.0, 1.0) * 0.1)
 			var v: float = 0.92 + _hs(i, j) * 0.16
 			cols[k] = Color(c.r * v, c.g * v, c.b * v, 1.0)
 	var indices := PackedInt32Array()
@@ -299,23 +367,26 @@ func _build_mesh() -> void:
 	add_child(body)
 
 
-# أرض مستوية ممتدة خارج حدود الخريطة بدل البحر القديم
-func _build_ground() -> void:
+# سطح الماء: يمتد خارج الخريطة ليحيط بها كبحر واقعي
+func _build_water() -> void:
 	var ws: float = n * Data.CELL
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(5200.0, 5200.0)
-	var gm := StandardMaterial3D.new()
-	gm.albedo_color = Color(0.5, 0.42, 0.29)
-	gm.roughness = 1.0
+	water_mat = ShaderMaterial.new()
+	water_mat.shader = SHADER_W
+	water_mat.set_shader_parameter("height_tex", height_tex)
+	water_mat.set_shader_parameter("hscale", float(n) / float(n + 1))
+	water_mat.set_shader_parameter("hoff", 0.5 / float(n + 1))
+	water_mat.set_shader_parameter("water_y", WATER_Y)
 	var mi := MeshInstance3D.new()
 	mi.mesh = pm
-	mi.material_override = gm
-	mi.position = Vector3(ws * 0.5, FLAT_Y - 0.08, ws * 0.5)
+	mi.material_override = water_mat
+	mi.position = Vector3(ws * 0.5, WATER_Y, ws * 0.5)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 
 
-# ---------- النباتات والصخور والجسور والآثار ----------
+# ---------- الأشجار والجسور ----------
 func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, col: Color) -> void:
 	st.set_color(col)
 	st.add_vertex(a)
@@ -477,19 +548,16 @@ func _build_details(seed_val: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_val + 99
 	var palms := {}
-	var bushes := {}
-	var rocks := {}
 	var planks := {}
 	var rails_x := {}
 	var rails_z := {}
 	var pylons := {}
 	var acacias := {}
 	var poplars := {}
-	var rock_count := 0
 	var tn := _noise(seed_val + 77, 0.05, 2)
 	for y in n:
 		if y % 30 == 0:
-			_p(0.8 + 0.1 * float(y) / n, "جاري زرع النخيل وبناء الآثار...")
+			_p(0.8 + 0.1 * float(y) / n, "جاري زرع الأشجار وبناء الجسور...")
 			await get_tree().process_frame
 		for x in n:
 			var ci := idx(x, y)
@@ -497,17 +565,17 @@ func _build_details(seed_val: int) -> void:
 			if t == 4:
 				var cxw: float = (x + 0.5) * Data.CELL
 				var czw: float = (y + 0.5) * Data.CELL
-				_add_inst(planks, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(cxw, 0.3, czw)), Color(0.42, 0.29, 0.17))
+				_add_inst(planks, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(cxw, FLAT_Y + 0.05, czw)), Color(0.42, 0.29, 0.17))
 				if types[idx(x + 1, y)] == 3:
-					_add_inst(rails_x, cxw, czw, Transform3D(Basis.IDENTITY, Vector3((x + 1) * Data.CELL - 0.1, 0.85, czw)), Color(0.34, 0.23, 0.14))
+					_add_inst(rails_x, cxw, czw, Transform3D(Basis.IDENTITY, Vector3((x + 1) * Data.CELL - 0.1, FLAT_Y + 0.6, czw)), Color(0.34, 0.23, 0.14))
 				if types[idx(x - 1, y)] == 3:
-					_add_inst(rails_x, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(x * Data.CELL + 0.1, 0.85, czw)), Color(0.34, 0.23, 0.14))
+					_add_inst(rails_x, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(x * Data.CELL + 0.1, FLAT_Y + 0.6, czw)), Color(0.34, 0.23, 0.14))
 				if types[idx(x, y + 1)] == 3:
-					_add_inst(rails_z, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(cxw, 0.85, (y + 1) * Data.CELL - 0.1)), Color(0.34, 0.23, 0.14))
+					_add_inst(rails_z, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(cxw, FLAT_Y + 0.6, (y + 1) * Data.CELL - 0.1)), Color(0.34, 0.23, 0.14))
 				if types[idx(x, y - 1)] == 3:
-					_add_inst(rails_z, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(cxw, 0.85, y * Data.CELL + 0.1)), Color(0.34, 0.23, 0.14))
+					_add_inst(rails_z, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(cxw, FLAT_Y + 0.6, y * Data.CELL + 0.1)), Color(0.34, 0.23, 0.14))
 				if (x + y) % 2 == 0:
-					_add_inst(pylons, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(cxw, -1.7, czw)), Color(0.4, 0.34, 0.28))
+					_add_inst(pylons, cxw, czw, Transform3D(Basis.IDENTITY, Vector3(cxw, FLAT_Y - 1.95, czw)), Color(0.4, 0.34, 0.28))
 				continue
 			if t == 0 or t == 1 or t == 5:
 				if road_w[ci] > 0.05 or _near_base(x, y, 15.0):
@@ -520,7 +588,8 @@ func _build_details(seed_val: int) -> void:
 			var grove: float = smoothstep(0.55, 0.82, tn.get_noise_2d(x, y) * 0.5 + 0.5)
 			var roll: float = rng.randf()
 			if t == 5:
-				# الغابات: نخيل وسدر وحور مختلطة
+				# الغابات: نخيل وسدر وحور مختلطة (الخلية وجيرانها ممنوع البناء عليها)
+				_block_around(x, y)
 				if roll < 0.62:
 					var s: float = rng.randf_range(0.85, 1.5)
 					var rb := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s, s))
@@ -532,45 +601,16 @@ func _build_details(seed_val: int) -> void:
 					else:
 						_add_inst(palms, wx, wz, Transform3D(rb, Vector3(wx, gy, wz)), Color(shade, shade, shade))
 			elif t == 1:
-				# العشب: أشجار متفرقة وشجيرات
-				if roll < 0.07 + grove * 0.1:
+				# العشب: أشجار متفرقة
+				if roll < 0.08 + grove * 0.12:
 					_plant_tree(rng, wx, wz, gy, palms, acacias, poplars)
-					build_block[ci] = 1
-				elif roll < 0.3:
-					var sb: float = rng.randf_range(0.6, 1.2)
-					var gcol := Color(0.3, 0.46, 0.18).lerp(Color(0.45, 0.55, 0.22), rng.randf())
-					_add_inst(bushes, wx, wz, Transform3D(Basis.IDENTITY.scaled(Vector3(sb, sb * 0.8, sb)), Vector3(wx, gy + 0.2, wz)), gcol)
 			else:
-				# الرمل: أشجار منتشرة في كل مكان وتتكاثف في بساتين، والصخور نادرة جداً
-				if roll < 0.012 + grove * 0.05:
+				# الرمل: أشجار منتشرة وتتكاثف في بساتين
+				if roll < 0.02 + grove * 0.07:
 					_plant_tree(rng, wx, wz, gy, palms, acacias, poplars)
-					build_block[ci] = 1
-				elif roll < 0.0125 + grove * 0.05 and rock_count < 18 and not _near_base(x, y, 30.0):
-					rock_count += 1
-					var sr: float = rng.randf_range(0.5, 1.2)
-					var rcol := Color(0.55, 0.47, 0.38).lerp(Color(0.68, 0.6, 0.48), rng.randf())
-					var rrb := Basis(Vector3(rng.randf() + 0.1, rng.randf(), rng.randf()).normalized(), rng.randf() * TAU).scaled(Vector3(sr * 1.4, sr, sr * 1.1))
-					_add_inst(rocks, wx, wz, Transform3D(rrb, Vector3(wx, gy + sr * 0.25, wz)), rcol)
-					build_block[ci] = 1
-				elif roll < 0.08:
-					var sb2: float = rng.randf_range(0.4, 0.8)
-					var dcol := Color(0.5, 0.45, 0.25).lerp(Color(0.62, 0.55, 0.33), rng.randf())
-					_add_inst(bushes, wx, wz, Transform3D(Basis.IDENTITY.scaled(Vector3(sb2, sb2 * 0.6, sb2)), Vector3(wx, gy + 0.1, wz)), dcol)
 	_flush(palms, _palm_mesh(), _veg_mat(true), 170.0)
 	_flush(acacias, _acacia_mesh(), _veg_mat(true), 170.0)
 	_flush(poplars, _poplar_mesh(), _veg_mat(true), 170.0)
-	var bush := SphereMesh.new()
-	bush.radius = 0.6
-	bush.height = 0.9
-	bush.radial_segments = 6
-	bush.rings = 3
-	_flush(bushes, bush, _veg_mat(false), 110.0, false)
-	var rock := SphereMesh.new()
-	rock.radius = 0.7
-	rock.height = 1.0
-	rock.radial_segments = 6
-	rock.rings = 3
-	_flush(rocks, rock, _veg_mat(false), 150.0, false)
 	var plank := BoxMesh.new()
 	plank.size = Vector3(Data.CELL, 0.3, Data.CELL)
 	_flush(planks, plank, _veg_mat(false), 600.0)
@@ -586,9 +626,6 @@ func _build_details(seed_val: int) -> void:
 	py.height = 4.0
 	py.radial_segments = 6
 	_flush(pylons, py, _veg_mat(false), 300.0, false)
-	for lm in landmarks:
-		_ziggurat(Vector3((lm.x + 2.5) * Data.CELL, FLAT_Y, (lm.y + 2.5) * Data.CELL))
-	_ruins(rng)
 
 
 func _plant_tree(rng: RandomNumberGenerator, wx: float, wz: float, gy: float, palms: Dictionary, acacias: Dictionary, poplars: Dictionary) -> void:
@@ -596,6 +633,7 @@ func _plant_tree(rng: RandomNumberGenerator, wx: float, wz: float, gy: float, pa
 	var rb := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s, s))
 	var shade: float = rng.randf_range(0.88, 1.1)
 	var xf := Transform3D(rb, Vector3(wx, gy, wz))
+	_block_around(int(wx / Data.CELL), int(wz / Data.CELL))
 	var pick: float = rng.randf()
 	if pick < 0.45:
 		_add_inst(palms, wx, wz, xf, Color(shade, shade, shade))
@@ -605,88 +643,11 @@ func _plant_tree(rng: RandomNumberGenerator, wx: float, wz: float, gy: float, pa
 		_add_inst(poplars, wx, wz, xf, Color(shade, shade, shade))
 
 
-func _stone_mat(col: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = col
-	m.roughness = 0.95
-	return m
-
-
-func _block(parent: Node3D, size: Vector3, pos: Vector3, col: Color) -> void:
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mi.mesh = bm
-	mi.material_override = _stone_mat(col)
-	mi.position = pos
-	parent.add_child(mi)
-
-
-func _ziggurat(center: Vector3) -> void:
-	var root := Node3D.new()
-	root.position = center
-	add_child(root)
-	var col := Color(0.75, 0.63, 0.43)
-	_block(root, Vector3(10.4, 2.2, 10.4), Vector3(0, -0.2, 0), col.darkened(0.12))
-	var sizes := [9.0, 7.0, 5.0, 3.0]
-	var y := 1.3
-	for k in range(sizes.size()):
-		var s: float = sizes[k]
-		_block(root, Vector3(s, 1.7, s), Vector3(0, y, 0), col.darkened(0.04 * float(k)))
-		y += 1.7
-	_block(root, Vector3(1.8, 1.5, 1.8), Vector3(0, y + 0.1, 0), col.lightened(0.08))
-	_block(root, Vector3(2.2, 0.4, 3.0), Vector3(0, 0.9, 5.8), col.darkened(0.15))
-
-
-func _ruins(rng: RandomNumberGenerator) -> void:
-	var placed := 0
-	var tries := 0
-	while placed < 30 and tries < 900:
-		tries += 1
-		var x: int = rng.randi_range(40, n - 40)
-		var y: int = rng.randi_range(40, n - 40)
-		if types[idx(x, y)] != 0 or road_w[idx(x, y)] > 0.05 or _near_base(x, y, 45.0):
-			continue
-		var ok := true
-		for dy in range(-1, 3):
-			for dx in range(-1, 3):
-				var t: int = types[idx(x + dx, y + dy)]
-				if t != 0 or build_block[idx(x + dx, y + dy)] == 1:
-					ok = false
-		if not ok:
-			continue
-		var fp: Vector2 = footprint(Vector2i(x, y), 2)
-		if fp.y - fp.x > 0.6:
-			continue
-		var root := Node3D.new()
-		var wx: float = (x + 1.0) * Data.CELL
-		var wz: float = (y + 1.0) * Data.CELL
-		root.position = Vector3(wx, fp.y, wz)
-		add_child(root)
-		var col := Color(0.78, 0.68, 0.5)
-		_block(root, Vector3(4.2, 0.6, 4.2), Vector3(0, 0.0, 0), col.darkened(0.1))
-		for k in range(rng.randi_range(3, 5)):
-			var cx: float = rng.randf_range(-1.5, 1.5)
-			var cz: float = rng.randf_range(-1.5, 1.5)
-			var h: float = rng.randf_range(1.6, 3.6)
-			var mi := MeshInstance3D.new()
-			var cm := CylinderMesh.new()
-			cm.top_radius = 0.34
-			cm.bottom_radius = 0.4
-			cm.height = h
-			cm.radial_segments = 8
-			mi.mesh = cm
-			mi.material_override = _stone_mat(col)
-			if rng.randf() > 0.7:
-				mi.rotation = Vector3(0, rng.randf() * TAU, PI / 2.0 - 0.1)
-				mi.position = Vector3(cx, 0.55, cz)
-			else:
-				mi.position = Vector3(cx, h * 0.5 + 0.3, cz)
-			root.add_child(mi)
-		for dy in range(0, 2):
-			for dx in range(0, 2):
-				types[idx(x + dx, y + dy)] = 6
-		for dy in range(-1, 3):
-			for dx in range(-1, 3):
-				build_block[idx(x + dx, y + dy)] = 1
-		placed += 1
+# يمنع البناء على خلية الشجرة وما حولها (تاج الشجرة يمتد لجيرانها)
+func _block_around(x: int, y: int) -> void:
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var cx: int = x + dx
+			var cy: int = y + dy
+			if cx >= 0 and cy >= 0 and cx < n and cy < n:
+				build_block[idx(cx, cy)] = 1
