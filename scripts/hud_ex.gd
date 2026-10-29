@@ -67,7 +67,7 @@ func _pause_button() -> Button:
 func toast(msg: String) -> void:
 	var m: String = msg
 	if msg == "اجمع الذهب بالشاحنات ودمّر مقرات العدو":
-		m = "درّب شاحنة ذهب من مقر التجميع لتبدأ بجمع الذهب"
+		m = "معك شاحنة ذهب هدية. درّب المزيد من مقر التجميع حسب ذهبك"
 	super.toast(m)
 
 
