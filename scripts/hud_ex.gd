@@ -3,7 +3,7 @@ extends Hud
 ## واجهة محسّنة:
 ## - القائمة الرئيسية بعبارة «صنع في العراق» فقط، وشاشة اللعب نظيفة بلا شعار ولا علم
 ## - زر إيقاف دائري بأيقونة ⏸ وقائمة إيقاف احترافية، والصوت يُضبط من الإعدادات فقط
-## - إعدادات: الصوت والصورة (سطوع/تباين/تشبع) وجودة اللعبة ومعدل الإطارات
+## - إعدادات: الصوت والصورة (سطوع/تباين/تشبع) وجودة اللعبة ومعدل الإطارات (تُطبَّق فعلياً مع عداد إطارات حي)
 ## - معاينة الوحدات تُؤطَّر تلقائياً (إصلاح ظهور الجنود في الثكنة)
 
 var gfx_quality_btns: Array = []
@@ -15,6 +15,10 @@ var lbl_sat: Label
 var sl_bright: HSlider
 var sl_contrast: HSlider
 var sl_sat: HSlider
+var fps_lbl: Label
+var lbl_fps_live: Label
+var lbl_fps_hint: Label
+var fps_toggle_btn: Button
 
 
 # أيقونة الإيقاف: شريطان رأسيان
@@ -49,6 +53,25 @@ func _build_hud() -> void:
 				for b in c.get_children():
 					b.queue_free()
 				c.add_child(_pause_button())
+	GameSettings.load_cfg()
+	fps_lbl = _lbl("", 16, Color(0.8, 0.95, 0.8))
+	fps_lbl.position = Vector2(14, 8)
+	fps_lbl.visible = GameSettings.show_fps
+	hud_root.add_child(fps_lbl)
+	var tm := Timer.new()
+	tm.wait_time = 0.5
+	tm.process_mode = Node.PROCESS_MODE_ALWAYS
+	tm.timeout.connect(_tick_fps)
+	add_child(tm)
+	tm.start()
+
+
+func _tick_fps() -> void:
+	var f: int = int(Engine.get_frames_per_second())
+	if fps_lbl != null and fps_lbl.visible:
+		fps_lbl.text = "%d FPS" % f
+	if lbl_fps_live != null and settings_box != null and settings_box.visible:
+		lbl_fps_live.text = "المعدل الحالي: %d إطار/ث" % f
 
 
 func _pause_button() -> Button:
@@ -67,7 +90,15 @@ func _pause_button() -> Button:
 func toast(msg: String) -> void:
 	var m: String = msg
 	if msg == "اجمع الذهب بالشاحنات ودمّر مقرات العدو":
-		m = "معك شاحنة ذهب هدية. درّب المزيد من مقر التجميع حسب ذهبك"
+		var soldiers := 0
+		var trucks := 0
+		for u in g.units:
+			if u.team == 0 and not u.dead:
+				if u.is_truck:
+					trucks += 1
+				else:
+					soldiers += 1
+		m = "هديتك: %d جنود و%d شاحنة ذهب. درّب المزيد حسب ذهبك" % [soldiers, trucks]
 	super.toast(m)
 
 
@@ -207,14 +238,14 @@ func _build_settings() -> void:
 	qrow.add_theme_constant_override("separation", 8)
 	inner.add_child(qrow)
 	gfx_quality_btns.clear()
-	for i in range(3):
-		var qb := _btn(str(GameSettings.QUALITY_NAMES[i]), func(): _set_quality(i), Vector2(150, 50), 19)
+	for i in range(GameSettings.QUALITY_NAMES.size()):
+		var qb := _btn(str(GameSettings.QUALITY_NAMES[i]), func(): _set_quality(i), Vector2(120, 50), 18)
 		qb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		qrow.add_child(qb)
 		gfx_quality_btns.append(qb)
 	lbl_quality_hint = _lbl("", 15, Color(0.75, 0.86, 0.82))
 	lbl_quality_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl_quality_hint.custom_minimum_size = Vector2(600, 0)
+	lbl_quality_hint.custom_minimum_size = Vector2(620, 0)
 	inner.add_child(lbl_quality_hint)
 
 	inner.add_child(_section("04", "معدل الإطارات"))
@@ -222,13 +253,22 @@ func _build_settings() -> void:
 	frow.add_theme_constant_override("separation", 8)
 	inner.add_child(frow)
 	gfx_fps_btns.clear()
-	for f in [30, 45, 60]:
-		var fb := _btn(str(f) + " إطار", func(): _set_fps(f), Vector2(150, 50), 19)
+	for i in range(GameSettings.FPS_VALUES.size()):
+		var fb := _btn(str(GameSettings.FPS_NAMES[i]), func(): _set_fps(i), Vector2(120, 50), 19)
 		fb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		frow.add_child(fb)
 		gfx_fps_btns.append(fb)
-	var fh := _lbl("30 إطار يوفر البطارية ويناسب الهواتف الضعيفة", 15, Color(0.75, 0.86, 0.82))
-	inner.add_child(fh)
+	lbl_fps_hint = _lbl("", 15, Color(0.75, 0.86, 0.82))
+	lbl_fps_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl_fps_hint.custom_minimum_size = Vector2(620, 0)
+	inner.add_child(lbl_fps_hint)
+	lbl_fps_live = _lbl("", 17, Color(0.62, 0.95, 0.7))
+	inner.add_child(lbl_fps_live)
+	fps_toggle_btn = _btn("", func(): _toggle_fps(), Vector2(380, 44), 17)
+	var tr_row := HBoxContainer.new()
+	tr_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	tr_row.add_child(fps_toggle_btn)
+	inner.add_child(tr_row)
 	_refresh_gfx_ui()
 
 	var back := _btn("رجوع", func(): close_settings(), Vector2(300, 54), 22)
@@ -250,9 +290,14 @@ func _refresh_gfx_ui() -> void:
 	for i in range(gfx_quality_btns.size()):
 		_seg_style(gfx_quality_btns[i], i == GameSettings.quality)
 	lbl_quality_hint.text = str(GameSettings.QUALITY_HINTS[GameSettings.quality])
-	var fv: Array = [30, 45, 60]
+	var fi: int = GameSettings.fps_index()
 	for i in range(gfx_fps_btns.size()):
-		_seg_style(gfx_fps_btns[i], int(fv[i]) == GameSettings.fps)
+		_seg_style(gfx_fps_btns[i], i == fi)
+	lbl_fps_hint.text = str(GameSettings.FPS_HINTS[fi])
+	lbl_fps_live.text = "المعدل الحالي: %d إطار/ث" % int(Engine.get_frames_per_second())
+	fps_toggle_btn.text = "عداد الإطارات أثناء اللعب: " + ("مفعّل" if GameSettings.show_fps else "معطّل")
+	if fps_lbl != null:
+		fps_lbl.visible = GameSettings.show_fps
 
 
 func _apply_gfx() -> void:
@@ -291,8 +336,14 @@ func _set_quality(q: int) -> void:
 	_apply_gfx()
 
 
-func _set_fps(f: int) -> void:
-	GameSettings.fps = f
+func _set_fps(i: int) -> void:
+	GameSettings.fps = int(GameSettings.FPS_VALUES[i])
+	Sfx.play("pick_mode")
+	_apply_gfx()
+
+
+func _toggle_fps() -> void:
+	GameSettings.show_fps = not GameSettings.show_fps
 	Sfx.play("pick_mode")
 	_apply_gfx()
 
