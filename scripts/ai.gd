@@ -167,7 +167,7 @@ func _place_depot() -> void:
 			continue
 		var near_dep := false
 		for d in own:
-			if Vector2(d.cell).distance_to(Vector2(m["cell"])) < 16.0:
+			if Vector2(d.cell).distance_to(Vector2(m["cell"])) < 16.0 * Data.K:
 				near_dep = true
 		if near_dep:
 			continue
@@ -175,7 +175,7 @@ func _place_depot() -> void:
 		if dist < bd:
 			bd = dist
 			best = m
-	if best == null or bd > 70.0:
+	if best == null or bd > 70.0 * Data.K:
 		return
 	for i in 40:
 		var c: Vector2i = best["cell"] + Vector2i(randi_range(-7, 7), randi_range(-7, 7))
