@@ -5,10 +5,12 @@ extends Main
 ## - توزيع نقاط الوصول بحيث لا تتزاحم المجموعة على نفس المكان
 ## - تنبيه منفصل لهجوم على مدينتك وهجوم على مدينة حليفك
 ## - تسجيل الهجمات ليدافع الحلفاء (وقاذفاتك) تلقائياً
-## - تطبيق إعدادات الجودة والصورة، وشاحنة ذهب هدية في بداية المباراة
+## - تطبيق إعدادات الجودة والإطارات فعلياً، وهدية بداية المباراة: 5 جنود وشاحنة ذهب (مع حارس احتياطي)
+## - مؤثرات أخف على الجودة المنخفضة
 ## - منع البناء قرب الأشجار أو في مناطق لم تُكشف بعد (مع هامش خلية)
 
 var alert_cd_ally := 0.0
+var gift_t := 0.0
 
 
 func _ready() -> void:
@@ -36,7 +38,7 @@ func _setup_fog() -> void:
 	GameSettings.apply(self)
 
 
-# بداية المباراة: مقر ومقر ذهب وثكنة وثلاثة مشاة وشاحنة ذهب هدية
+# بداية المباراة: مقر ومقر ذهب وثكنة، وهدية: 5 جنود وشاحنة ذهب واحدة لكل جيش
 func _spawn_initial() -> void:
 	var half: int = Data.MAP / 2
 	for o in players:
@@ -49,14 +51,47 @@ func _spawn_initial() -> void:
 		add_building("bar", o, b + bar_off, true)
 		if hostile(o, 0):
 			add_building("fac", o, b + Vector2i(bar_off.x, -4 if low else 4), true)
-		var hq = find_hq(o)
-		var p: Vector3 = free_spot(hq)
-		for i in 3:
-			spawn_unit("inf", o, spawn_pos_near(p, "inf"))
-		# هدية بداية المباراة: شاحنة ذهب واحدة لكل جيش (والمزيد يُدرَّب من مقر التجميع حسب الذهب)
-		for bd in blds:
-			if bd.team == o and bd.type == "dep":
-				spawn_unit("truck", o, spawn_pos_near(free_spot(bd), "truck"))
+		_spawn_gift(o)
+
+
+func _spawn_gift(o: int) -> void:
+	var hq = find_hq(o)
+	if hq == null:
+		return
+	var p: Vector3 = free_spot(hq)
+	for i in 5:
+		spawn_unit("inf", o, spawn_pos_near(p, "inf"))
+	var made := false
+	for bd in blds:
+		if bd.team == o and bd.type == "dep" and not bd.dead:
+			spawn_unit("truck", o, spawn_pos_near(free_spot(bd), "truck"))
+			made = true
+			break
+	if not made:
+		spawn_unit("truck", o, spawn_pos_near(p, "truck"))
+
+
+# حارس احتياطي: إن بدأت المباراة دون أي وحدة للاعب (حفظ تالف مثلاً) تُمنح الهدية
+func _ensure_gift() -> void:
+	if not running or loading_now or find_hq(0) == null:
+		return
+	for u in units:
+		if u.team == 0 and not u.dead:
+			return
+	_spawn_gift(0)
+
+
+# حفظ قديم أو من خريطة بحجم مختلف: نبدأ مباراة جديدة بدل تحميل حالة غير متوافقة
+func _restore(d: Dictionary) -> void:
+	var ok := false
+	for bd in d.get("buildings", []):
+		if str(bd["t"]) == "hq" and int(bd["o"]) == 0:
+			if Vector2i(int(bd["cx"]), int(bd["cy"])) == Data.BASES[0]:
+				ok = true
+	if not ok:
+		_spawn_initial()
+		return
+	super._restore(d)
 
 
 # ---------- البناء: لا أشجار ولا مناطق غير مكتشفة ----------
@@ -115,12 +150,34 @@ func try_place(gp: Vector3) -> void:
 func _clear_world() -> void:
 	Threats.list.clear()
 	alert_cd_ally = 0.0
+	gift_t = 0.0
 	super._clear_world()
 
 
 func _process(delta: float) -> void:
 	alert_cd_ally -= delta
 	super._process(delta)
+	GameSettings.tick(self, delta)
+	if running and gift_t >= 0.0:
+		gift_t += delta
+		if gift_t > 1.5:
+			gift_t = -1.0
+			_ensure_gift()
+
+
+# ---------- مؤثرات أخف على الجودة المنخفضة ----------
+func make_smoke(extents: Vector3, amount: int) -> CPUParticles3D:
+	return super.make_smoke(extents, maxi(2, int(float(amount) * GameSettings.fx_scale())))
+
+
+func make_fire(extents: Vector3, amount: int) -> CPUParticles3D:
+	return super.make_fire(extents, maxi(2, int(float(amount) * GameSettings.fx_scale())))
+
+
+func impact(pos: Vector3, heavy: bool) -> void:
+	if GameSettings.preset() == 0 and randf() < 0.5:
+		return
+	super.impact(pos, heavy)
 
 
 # ---------- التنبيهات ----------
