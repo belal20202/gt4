@@ -130,11 +130,11 @@ func _gen_types(seed_val: int) -> void:
 	landmarks = []
 
 
-# جسر بعرض 5 خلايا يمر بمركز البحيرة ويمتد لليابسة على الطرفين
+# جسر بعرض 7 خلايا (تعبره الدبابات الثقيلة) يمر بمركز البحيرة ويمتد لليابسة على الطرفين
 func _lake_bridge(cx: int, cy: int, rx: int, ry: int, vertical: bool) -> void:
 	var half_len: int = (ry if vertical else rx) + 7
 	for k in range(-half_len, half_len + 1):
-		for w in range(-2, 3):
+		for w in range(-3, 4):
 			var x: int = (cx + w) if vertical else (cx + k)
 			var y: int = (cy + k) if vertical else (cy + w)
 			if x < 1 or y < 1 or x >= n - 1 or y >= n - 1:
