@@ -139,7 +139,7 @@ func take_damage(dm: float, from_team: int) -> void:
 		hit_cd = 0.14
 		var rr: float = size * Data.CELL * 0.4
 		g.impact(position + Vector3(randf_range(-rr, rr), 1.2 + randf() * size * 0.5, randf_range(-rr, rr)), true)
-		Sfx.play("hit")
+		Sfx.play("hit_stone")
 	if hp <= 0.0:
 		die()
 
