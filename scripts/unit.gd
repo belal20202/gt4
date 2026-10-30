@@ -53,6 +53,7 @@ var stuck_ref := Vector3.ZERO
 var stuck_cnt := 0
 var scan_t := 0.0
 var ui_made := false
+var hurt_t := 0.0
 
 
 func setup(main: Main, t: String, tm: int, pos: Vector3) -> void:
@@ -168,10 +169,11 @@ func take_damage(dm: float, _from_team: int) -> void:
 	if dead:
 		return
 	hp -= dm
+	hurt_t = 6.0
 	if hit_cd <= 0.0 and (g.friendly(team) or g.is_vis(position)):
 		hit_cd = 0.12
 		g.impact(position + Vector3(0, 1.0, 0), cls != "inf")
-		Sfx.play("hit")
+		Sfx.play("hit" if cls == "inf" else "hit_metal")
 	if hp <= 0.0:
 		die()
 
@@ -222,7 +224,7 @@ func die() -> void:
 		return
 	g.explosion(position + Vector3(0, 0.8, 0), false)
 	if g.friendly(team) or visible:
-		Sfx.play("boom")
+		Sfx.play("boom_small")
 	Models.darken(model, 0.65)
 	_damage_fx_force()
 	tw.tween_interval(5.0)
@@ -245,7 +247,7 @@ func _damage_fx_force() -> void:
 func _crash() -> void:
 	g.explosion(position, false)
 	if g.friendly(team) or visible:
-		Sfx.play("boom")
+		Sfx.play("boom_small")
 	Models.darken(model, 0.65)
 
 
@@ -254,6 +256,7 @@ func _process(delta: float) -> void:
 		return
 	cd -= delta
 	hit_cd -= delta
+	hurt_t -= delta
 	moving = false
 	if is_truck:
 		_truck_logic(delta)
@@ -461,13 +464,19 @@ func _logic(delta: float) -> void:
 	var reach: float = 9.0
 	if type == "bomber":
 		reach = 22.0
+	elif is_air:
+		reach = 16.0
 	if tgt == null and type == "bomber" and team == 0 and not amove and path.is_empty():
 		_scramble(delta)
 	if tgt == null and (amove or path.is_empty()):
 		scan_t -= delta
 		if scan_t <= 0.0:
 			scan_t = 0.3 + randf() * 0.15
-			var r: float = (float(def["range"]) + (2.5 if amove else 3.0) + (12.0 if type == "bomber" else 0.0)) * Data.CELL
+			# نطاق الاكتشاف: الطائرات أبعد، ومن تعرّض لإصابة حديثاً (مدفعية/قناص) يرد من مسافة أبعد
+			var bonus: float = 12.0 if type == "bomber" else (5.0 if is_air else 0.0)
+			if hurt_t > 0.0:
+				bonus += 6.0
+			var r: float = (float(def["range"]) + (2.5 if amove else 3.0) + bonus) * Data.CELL
 			var e = g.nearest_enemy(position, team, r, not noair, type == "aa" or type == "jet")
 			if e != null:
 				tgt = e
@@ -541,7 +550,37 @@ func _fire(target) -> void:
 	if type == "bomber":
 		_bomb_splash(target, dm)
 	if vis_ok:
-		Sfx.play("cannon" if (type == "tank" or type == "heavy" or type == "art" or type == "rpg" or type == "bomber") else "shot")
+		Sfx.play(_fire_sound())
+
+
+# صوت الإطلاق حسب نوع السلاح
+func _fire_sound() -> String:
+	match type:
+		"mg":
+			return "mg"
+		"cmd":
+			return "smg"
+		"sniper":
+			return "sniper"
+		"rpg":
+			return "rocket"
+		"lt":
+			return "cannon_light"
+		"tank":
+			return "cannon"
+		"heavy":
+			return "cannon_heavy"
+		"art":
+			return "artillery"
+		"aa":
+			return "aa"
+		"heli":
+			return "heli_gun"
+		"jet":
+			return "jet_gun"
+		"bomber":
+			return "bomb"
+	return "shot"
 
 
 # انفجار القنبلة يصيب ما حول الهدف (بنصف الضرر) فتفيد القاذفة ضد الأرتال والمباني المتجمعة
