@@ -5,6 +5,7 @@ extends Hud
 ## - زر إيقاف دائري بأيقونة ⏸ وقائمة إيقاف احترافية، والصوت يُضبط من الإعدادات فقط
 ## - إعدادات: الصوت والصورة (سطوع/تباين/تشبع) وجودة اللعبة ومعدل الإطارات (تُطبَّق فعلياً مع عداد إطارات حي)
 ## - معاينة الوحدات تُؤطَّر تلقائياً (إصلاح ظهور الجنود في الثكنة)
+## - «سجل التشغيل» داخل الإعدادات: يعرض أخطاء اللعبة ويمكن نسخه وإرساله للمطوّر
 
 var gfx_quality_btns: Array = []
 var gfx_fps_btns: Array = []
@@ -19,6 +20,8 @@ var fps_lbl: Label
 var lbl_fps_live: Label
 var lbl_fps_hint: Label
 var fps_toggle_btn: Button
+var log_box: Control
+var log_lbl: Label
 
 
 # أيقونة الإيقاف: شريطان رأسيان
@@ -271,6 +274,17 @@ func _build_settings() -> void:
 	inner.add_child(tr_row)
 	_refresh_gfx_ui()
 
+	inner.add_child(_section("05", "تشخيص"))
+	var dh := _lbl("إن ظهرت مشكلة في اللعبة افتح السجل وانسخه وأرسله للمطوّر.", 15, Color(0.75, 0.86, 0.82))
+	dh.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dh.custom_minimum_size = Vector2(620, 0)
+	inner.add_child(dh)
+	var lrow := HBoxContainer.new()
+	lrow.alignment = BoxContainer.ALIGNMENT_CENTER
+	lrow.add_child(_btn("عرض سجل التشغيل", func(): _open_log(), Vector2(320, 46), 18))
+	inner.add_child(lrow)
+	_build_log_overlay()
+
 	var back := _btn("رجوع", func(): close_settings(), Vector2(300, 54), 22)
 	var br := HBoxContainer.new()
 	br.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -346,6 +360,91 @@ func _toggle_fps() -> void:
 	GameSettings.show_fps = not GameSettings.show_fps
 	Sfx.play("pick_mode")
 	_apply_gfx()
+
+
+# ---------- سجل التشغيل ----------
+func _build_log_overlay() -> void:
+	var o := _overlay("سجل التشغيل", 780.0)
+	log_box = o[0]
+	var v: VBoxContainer = o[1]
+	var hint := _lbl("اضغط «نسخ السجل» ثم الصقه في رسالة للمطوّر. الأسطر المهمة (الأخطاء) تظهر أولاً.", 15, Color(0.75, 0.86, 0.82))
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(720, 0)
+	v.add_child(hint)
+	var sc := ScrollContainer.new()
+	sc.custom_minimum_size = Vector2(0, 300)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(sc)
+	log_lbl = _lbl("", 12, Color(0.85, 0.92, 0.88))
+	log_lbl.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	log_lbl.custom_minimum_size = Vector2(720, 0)
+	sc.add_child(log_lbl)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	row.add_child(_btn("نسخ السجل", func(): _copy_log(), Vector2(220, 48), 18))
+	row.add_child(_btn("تحديث", func(): _refresh_log(), Vector2(150, 48), 18))
+	row.add_child(_btn("رجوع", func(): _close_log(), Vector2(150, 48), 18))
+	v.add_child(row)
+	log_box.visible = false
+
+
+func _open_log() -> void:
+	Sfx.play("click")
+	_refresh_log()
+	log_box.visible = true
+
+
+func _close_log() -> void:
+	Sfx.play("click")
+	log_box.visible = false
+
+
+func close_overlays() -> bool:
+	if log_box != null and log_box.visible:
+		log_box.visible = false
+		return true
+	return super.close_overlays()
+
+
+func _read_log() -> String:
+	var path := "user://logs/godot.log"
+	if not FileAccess.file_exists(path):
+		return "لا يوجد ملف سجل بعد. أعد تشغيل اللعبة ثم افتح هذه الصفحة."
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return "تعذّر فتح ملف السجل."
+	var txt: String = f.get_as_text()
+	f.close()
+	var important := PackedStringArray()
+	var tail := PackedStringArray()
+	for l in txt.split("\n"):
+		var line: String = l.strip_edges()
+		if line == "":
+			continue
+		tail.append(line)
+		if line.contains("ERROR") or line.contains("SCRIPT") or line.contains("Parse") or line.contains("WARNING") or line.contains("الهدية") or line.contains("فشل") or line.contains("بلا نموذج"):
+			important.append(line)
+	var out := PackedStringArray()
+	out.append("== الأسطر المهمة (آخر 40) ==")
+	var a: int = maxi(0, important.size() - 40)
+	for i in range(a, important.size()):
+		out.append(important[i])
+	out.append("== آخر 30 سطراً ==")
+	var b: int = maxi(0, tail.size() - 30)
+	for i in range(b, tail.size()):
+		out.append(tail[i])
+	return "\n".join(out)
+
+
+func _refresh_log() -> void:
+	log_lbl.text = _read_log()
+
+
+func _copy_log() -> void:
+	DisplayServer.clipboard_set(log_lbl.text)
+	Sfx.play("ok")
+	toast("تم نسخ السجل")
 
 
 # ---------- معاينة الوحدات والمباني ----------
