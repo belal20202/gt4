@@ -132,6 +132,8 @@ static func apply(main: Main) -> void:
 				m.visibility_range_end = float(m.get_meta("vr0")) * float(VEG[p])
 		if tr.water_mat != null:
 			tr.water_mat.set_shader_parameter("detail", p)
+		if tr.terr_mat != null:
+			tr.terr_mat.set_shader_parameter("detail", p)
 
 
 # الجودة التلقائية: كل ثانيتين نقيس الإطارات ونرفع أو نخفض دقة العرض بخطوات صغيرة
