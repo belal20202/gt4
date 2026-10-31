@@ -6,7 +6,8 @@ extends Main
 ## - تنبيه منفصل لهجوم على مدينتك وهجوم على مدينة حليفك
 ## - تسجيل الهجمات ليدافع الحلفاء (وقاذفاتك) تلقائياً
 ## - تطبيق إعدادات الجودة والإطارات فعلياً، وهدية بداية المباراة: 5 جنود وشاحنة ذهب (مع حارس احتياطي)
-## - مؤثرات أخف على الجودة المنخفضة
+## - مؤثرات أخف على الجودة المنخفضة، وإضاءة صحراوية أوضح للأرضية
+## - حماية الوحدات: نموذج احتياطي مرئي إن فشل بناء النموذج، وطباعة تقرير الهدية في سجل التشغيل
 ## - منع البناء قرب الأشجار أو في مناطق لم تُكشف بعد (مع هامش خلية)
 
 var alert_cd_ally := 0.0
@@ -30,6 +31,39 @@ func _ready() -> void:
 			spiral.append(Vector2i(x, y))
 	spiral.sort_custom(func(a, b): return a.length_squared() < b.length_squared())
 	GameSettings.apply(self)
+
+
+# إضاءة صحراوية: ضوء محيط أقوى وضباب أخف ليظهر سطح الأرض بوضوح
+func _build_environment() -> void:
+	super._build_environment()
+	for c in get_children():
+		if c is WorldEnvironment:
+			var env: Environment = (c as WorldEnvironment).environment
+			if env != null:
+				env.ambient_light_energy = 1.2
+				env.fog_density = 0.0008
+				env.fog_light_color = Color(0.9, 0.82, 0.64)
+
+
+# يضمن أن كل وحدة ظاهرة: إن فشل بناء نموذجها نضع مجسّماً بسيطاً بلون جيشها
+func spawn_unit(type: String, team: int, pos: Vector3) -> Unit:
+	var u: Unit = super.spawn_unit(type, team, pos)
+	if u == null:
+		push_error("فشل إنشاء وحدة من نوع " + type)
+		return u
+	if u.model == null or u.get_child_count() == 0:
+		push_error("وحدة بلا نموذج: " + type + " (أُضيف مجسّم احتياطي)")
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(2.2, 1.6, 3.4) if type == "truck" else Vector3(0.7, 1.7, 0.7)
+		mi.mesh = bm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Data.ARMIES[army_of[team]]["color"]
+		mi.material_override = mat
+		mi.position = Vector3(0, bm.size.y * 0.5, 0)
+		u.add_child(mi)
+		u.model = mi
+	return u
 
 
 # تُستدعى بعد توليد التضاريس: نطبّق الجودة على الأشجار والماء أيضاً
@@ -57,18 +91,36 @@ func _spawn_initial() -> void:
 func _spawn_gift(o: int) -> void:
 	var hq = find_hq(o)
 	if hq == null:
+		push_error("الهدية: لا يوجد مقر للجيش " + str(o))
 		return
 	var p: Vector3 = free_spot(hq)
+	var soldiers := 0
 	for i in 5:
-		spawn_unit("inf", o, spawn_pos_near(p, "inf"))
-	var made := false
+		var u: Unit = spawn_unit("inf", o, _safe_pos(spawn_pos_near(p, "inf"), hq, i))
+		if u != null:
+			soldiers += 1
+	var truck_ok := false
 	for bd in blds:
 		if bd.team == o and bd.type == "dep" and not bd.dead:
-			spawn_unit("truck", o, spawn_pos_near(free_spot(bd), "truck"))
-			made = true
+			var t1: Unit = spawn_unit("truck", o, _safe_pos(spawn_pos_near(free_spot(bd), "truck"), bd, 7))
+			truck_ok = t1 != null
 			break
-	if not made:
-		spawn_unit("truck", o, spawn_pos_near(p, "truck"))
+	if not truck_ok:
+		var t2: Unit = spawn_unit("truck", o, _safe_pos(spawn_pos_near(p, "truck"), hq, 7))
+		truck_ok = t2 != null
+	print("الهدية: جيش %d | جنود %d | شاحنة %s | عند %s" % [o, soldiers, str(truck_ok), str(p)])
+
+
+# موضع آمن قرب المبنى: إن كان الموضع المقترح بعيداً أو غير صالح نستخدم حلقة حول المبنى
+func _safe_pos(pos: Vector3, near, idx: int) -> Vector3:
+	var ok: bool = is_finite(pos.x) and is_finite(pos.z) and Vector2(pos.x - near.position.x, pos.z - near.position.z).length() < 40.0
+	if ok:
+		return pos
+	var ang: float = TAU * float(idx) / 8.0
+	var rr: float = (float(near.size) + 3.0) * Data.CELL
+	var px: float = near.position.x + cos(ang) * rr
+	var pz: float = near.position.z + sin(ang) * rr
+	return Vector3(px, terrain.height_at(px, pz), pz)
 
 
 # حارس احتياطي: إن بدأت المباراة دون أي وحدة للاعب (حفظ تالف مثلاً) تُمنح الهدية
