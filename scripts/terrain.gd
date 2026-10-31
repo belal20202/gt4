@@ -1,6 +1,6 @@
 class_name Terrain
 extends Node3D
-## تضاريس 3D: أرض مستوية بالكامل (بلا جبال ولا مرتفعات) يحيط بها بحر واقعي، مع بضع بحيرات تعبرها جسور، وأشجار فقط.
+## تضاريس 3D: صحراء مستوية بالكامل (بلا جبال ولا مرتفعات) يحيط بها بحر واقعي، مع بضع بحيرات تعبرها جسور، وواحات وأشجار فقط.
 ## الأنواع: 0 رمل، 1 عشب، 2 صخر، 3 ماء، 4 جسر، 5 غابة، 6 معلم أثري
 ## build_block: 1 = لا يمكن البناء (شجر أو حجر أو أثر)
 
@@ -90,7 +90,7 @@ func _gen_types(seed_val: int) -> void:
 		for x in n:
 			var v: float = (nb.get_noise_2d(x, y) * 0.65 + nd.get_noise_2d(x, y) * 0.35) * 0.5 + 0.5
 			var t := 0
-			if v < 0.33:
+			if v < 0.27:
 				t = 1
 			if t == 1 and _hs(x, y) > 0.42:
 				t = 5
@@ -271,18 +271,18 @@ func footprint(c: Vector2i, s: int) -> Vector2:
 func type_color(t: int) -> Color:
 	match t:
 		1:
-			return Color(0.42, 0.56, 0.24)
+			return Color(0.46, 0.55, 0.26)
 		2:
 			return Color(0.56, 0.46, 0.36)
 		3:
-			return Color(0.55, 0.47, 0.33)
+			return Color(0.62, 0.55, 0.40)
 		4:
 			return Color(0.46, 0.37, 0.27)
 		5:
-			return Color(0.27, 0.42, 0.17)
+			return Color(0.40, 0.49, 0.23)
 		6:
 			return Color(0.72, 0.62, 0.44)
-	return Color(0.87, 0.73, 0.49)
+	return Color(0.91, 0.78, 0.54)
 
 
 func _build_mesh() -> void:
